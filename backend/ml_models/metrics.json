@@ -1,0 +1,52 @@
+{
+  "anomaly": {
+    "model": "IsolationForest",
+    "task": "anomaly detection (unsupervised)",
+    "features": [
+      "speed_kmh",
+      "dist_from_prev_m",
+      "inactivity_min",
+      "dist_from_route_m"
+    ],
+    "n_train": 3300,
+    "n_test": 1100,
+    "contamination": 0.0909,
+    "precision": 0.96,
+    "recall": 0.96,
+    "f1": 0.96,
+    "roc_auc": 0.9996
+  },
+  "safety": {
+    "model": "RandomForestRegressor",
+    "task": "tourist safety score (0-100 regression)",
+    "features": [
+      "zone_risk",
+      "hour",
+      "anomaly_score",
+      "crime_index",
+      "weather_risk"
+    ],
+    "n_train": 4500,
+    "n_test": 1500,
+    "r2": 0.8989,
+    "mae": 3.6805,
+    "feature_importances": {
+      "zone_risk": 0.3713,
+      "hour": 0.0565,
+      "anomaly_score": 0.2732,
+      "crime_index": 0.2477,
+      "weather_risk": 0.0514
+    }
+  },
+  "zones": {
+    "model": "DBSCAN",
+    "task": "high-risk zone discovery (spatial clustering)",
+    "eps_deg": 0.005,
+    "min_samples": 12,
+    "n_points": 720,
+    "n_clusters": 4,
+    "n_noise": 64,
+    "silhouette": 0.8782,
+    "hotzones_file": "ml_models\\hotzones.json"
+  }
+}

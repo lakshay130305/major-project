@@ -1,0 +1,19 @@
+# Python
+backend/venv/
+__pycache__/
+*.pyc
+*.db
+backend/.env
+
+# ML artifacts (regenerate with train_all) — keep dir, ignore binaries
+backend/ml_models/*.joblib
+
+# Node
+frontend/node_modules/
+frontend/dist/
+npm-debug.log*
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store

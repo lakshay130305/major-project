@@ -1,0 +1,199 @@
+import base64
+import hashlib
+import io
+import json
+import uuid
+from datetime import datetime
+
+import qrcode
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_user, require_admin
+from app.core.security import hash_password
+from app.db.session import get_db
+from app.models.tourist import IdBlock, LocationPing, Tourist
+from app.models.user import User
+from app.schemas.tourist import (
+    IdBlockOut,
+    LocationUpdate,
+    SafetyScoreOut,
+    TouristCreate,
+    TouristOut,
+)
+from app.services import hashchain
+from app.services.monitoring import process_ping
+from app.services.safety import compute_safety_score
+
+router = APIRouter(prefix="/tourists", tags=["tourists"])
+
+
+def _generate_digital_id(name: str) -> str:
+    raw = f"{name}-{uuid.uuid4()}"
+    digest = hashlib.sha256(raw.encode()).hexdigest()[:12].upper()
+    return f"STS-{digest}"
+
+
+def _serialize(t: Tourist) -> dict:
+    return {
+        **t.__dict__,
+        "itinerary": json.loads(t.itinerary or "[]"),
+        "emergency_contacts": json.loads(t.emergency_contacts or "[]"),
+        "is_valid": t.is_valid,
+    }
+
+
+@router.post("", response_model=TouristOut, status_code=201)
+def register_tourist(payload: TouristCreate, db: Session = Depends(get_db)):
+    """Register a tourist, mint a digital ID, and seed its hash chain."""
+    digital_id = _generate_digital_id(payload.full_name)
+    tourist = Tourist(
+        digital_id=digital_id,
+        full_name=payload.full_name,
+        nationality=payload.nationality,
+        document_type=payload.document_type,
+        document_number=payload.document_number,
+        phone=payload.phone,
+        itinerary=json.dumps([w.model_dump() for w in payload.itinerary]),
+        emergency_contacts=json.dumps([c.model_dump() for c in payload.emergency_contacts]),
+        trip_start=payload.trip_start,
+        trip_end=payload.trip_end,
+    )
+    db.add(tourist)
+    db.flush()
+
+    # Genesis block of the tamper-proof ID chain
+    hashchain.append_block(db, tourist, "ID_ISSUED", {
+        "digital_id": digital_id,
+        "name": payload.full_name,
+        "document": payload.document_number,
+        "trip_end": payload.trip_end.isoformat(),
+    })
+
+    # optional tourist login account
+    if payload.email and payload.password:
+        if db.query(User).filter(User.email == payload.email).first():
+            raise HTTPException(status_code=400, detail="Email already registered")
+        db.add(User(
+            email=payload.email, full_name=payload.full_name,
+            hashed_password=hash_password(payload.password),
+            role="tourist", tourist_id=tourist.id,
+        ))
+
+    db.commit()
+    db.refresh(tourist)
+    return _serialize(tourist)
+
+
+@router.get("", response_model=list[TouristOut])
+def list_tourists(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    return [_serialize(t) for t in db.query(Tourist).all()]
+
+
+@router.get("/{tourist_id}", response_model=TouristOut)
+def get_tourist(tourist_id: int, db: Session = Depends(get_db),
+                user: User = Depends(get_current_user)):
+    t = db.get(Tourist, tourist_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Tourist not found")
+    if user.role == "tourist" and user.tourist_id != tourist_id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return _serialize(t)
+
+
+@router.get("/by-digital-id/{digital_id}", response_model=TouristOut)
+def get_by_digital_id(digital_id: str, db: Session = Depends(get_db),
+                      _: User = Depends(require_admin)):
+    t = db.query(Tourist).filter(Tourist.digital_id == digital_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail="Tourist not found")
+    return _serialize(t)
+
+
+@router.get("/{tourist_id}/qr")
+def get_qr(tourist_id: int, db: Session = Depends(get_db)):
+    """Return a base64 PNG QR code encoding the digital ID + validity."""
+    t = db.get(Tourist, tourist_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Tourist not found")
+    content = json.dumps({
+        "digital_id": t.digital_id,
+        "name": t.full_name,
+        "valid_until": t.trip_end.isoformat(),
+    })
+    img = qrcode.make(content)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    return {"digital_id": t.digital_id, "qr_png_base64": f"data:image/png;base64,{b64}"}
+
+
+@router.get("/{tourist_id}/chain", response_model=list[IdBlockOut])
+def get_chain(tourist_id: int, db: Session = Depends(get_db),
+              user: User = Depends(get_current_user)):
+    return (
+        db.query(IdBlock)
+        .filter(IdBlock.tourist_id == tourist_id)
+        .order_by(IdBlock.index.asc())
+        .all()
+    )
+
+
+@router.get("/{tourist_id}/chain/verify")
+def verify_chain(tourist_id: int, db: Session = Depends(get_db)):
+    return hashchain.verify_chain(db, tourist_id)
+
+
+@router.post("/{tourist_id}/location")
+def update_location(tourist_id: int, payload: LocationUpdate, db: Session = Depends(get_db)):
+    """Ingest a GPS ping through the full monitoring pipeline."""
+    t = db.get(Tourist, tourist_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Tourist not found")
+    return process_ping(db, t, payload.lat, payload.lng, payload.speed_kmh)
+
+
+@router.get("/{tourist_id}/safety-score", response_model=SafetyScoreOut)
+def get_safety_score(tourist_id: int, db: Session = Depends(get_db),
+                     user: User = Depends(get_current_user)):
+    t = db.get(Tourist, tourist_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Tourist not found")
+    last = (
+        db.query(LocationPing)
+        .filter(LocationPing.tourist_id == tourist_id)
+        .order_by(LocationPing.timestamp.desc())
+        .first()
+    )
+    anomaly_score = last.anomaly_score if last and last.anomaly_score is not None else 0.1
+    result = compute_safety_score(db, t, anomaly_score=anomaly_score)
+    return SafetyScoreOut(tourist_id=tourist_id, **result)
+
+
+@router.post("/{tourist_id}/tracking")
+def toggle_tracking(tourist_id: int, enabled: bool, db: Session = Depends(get_db),
+                    user: User = Depends(get_current_user)):
+    t = db.get(Tourist, tourist_id)
+    if not t:
+        raise HTTPException(status_code=404, detail="Tourist not found")
+    t.tracking_enabled = enabled
+    db.commit()
+    return {"tourist_id": tourist_id, "tracking_enabled": enabled}
+
+
+@router.get("/{tourist_id}/pings")
+def get_pings(tourist_id: int, limit: int = 100, db: Session = Depends(get_db),
+              user: User = Depends(get_current_user)):
+    pings = (
+        db.query(LocationPing)
+        .filter(LocationPing.tourist_id == tourist_id)
+        .order_by(LocationPing.timestamp.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {"lat": p.lat, "lng": p.lng, "speed_kmh": p.speed_kmh,
+         "timestamp": p.timestamp.isoformat(), "is_anomaly": p.is_anomaly,
+         "anomaly_score": p.anomaly_score}
+        for p in reversed(pings)
+    ]
