@@ -1,45 +1,80 @@
 """FastAPI application entrypoint for the Smart Tourist Safety system."""
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api import analytics, auth, incidents, tourists, ws, zones
 from app.core.config import settings
+from app.core.middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
+from app.core.ratelimit import global_rate_limit
 from app.db.session import init_db
 
-app = FastAPI(title=settings.PROJECT_NAME, version="1.0.0")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    import asyncio
+
+    from app.websocket.manager import manager
+
+    init_db()
+    manager.bind_loop(asyncio.get_running_loop())
+    yield
+
+
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    version="1.1.0",
+    lifespan=lifespan,
+    # Hide interactive docs in production by default.
+    docs_url=None if settings.is_production else "/docs",
+    redoc_url=None if settings.is_production else "/redoc",
 )
 
-
-@app.on_event("startup")
-def _startup() -> None:
-    init_db()
+# ---- middleware (order matters: outermost first) ----
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(BodySizeLimitMiddleware)
+if settings.allowed_hosts_list and settings.allowed_hosts_list != ["*"]:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.allowed_hosts_list)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
+)
 
 
 @app.get("/")
 def root():
-    return {
-        "name": settings.PROJECT_NAME,
-        "status": "ok",
-        "docs": "/docs",
-    }
+    return {"name": settings.PROJECT_NAME, "status": "ok",
+            "docs": None if settings.is_production else "/docs"}
 
 
 @app.get("/api/health")
 def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "environment": settings.ENVIRONMENT}
+
+
+@app.get("/api/config")
+def public_config():
+    """Non-sensitive config the frontend can consume (map defaults)."""
+    return {
+        "project_name": settings.PROJECT_NAME,
+        "map": {
+            "center": [settings.MAP_CENTER_LAT, settings.MAP_CENTER_LNG],
+            "zoom": settings.MAP_DEFAULT_ZOOM,
+        },
+    }
 
 
 PREFIX = settings.API_V1_PREFIX
-app.include_router(auth.router, prefix=PREFIX)
-app.include_router(tourists.router, prefix=PREFIX)
-app.include_router(zones.router, prefix=PREFIX)
-app.include_router(incidents.router, prefix=PREFIX)
-app.include_router(analytics.router, prefix=PREFIX)
-app.include_router(ws.router)  # websocket at /ws/alerts
+# Apply a coarse global per-IP rate limit to all API routers.
+_rl = [Depends(global_rate_limit)]
+app.include_router(auth.router, prefix=PREFIX, dependencies=_rl)
+app.include_router(tourists.router, prefix=PREFIX, dependencies=_rl)
+app.include_router(zones.router, prefix=PREFIX, dependencies=_rl)
+app.include_router(incidents.router, prefix=PREFIX, dependencies=_rl)
+app.include_router(analytics.router, prefix=PREFIX, dependencies=_rl)
+app.include_router(ws.router)  # websocket at /ws/alerts (auth via token query param)

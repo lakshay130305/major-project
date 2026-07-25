@@ -1,11 +1,13 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from './auth.jsx'
 import Login from './pages/Login.jsx'
+import Register from './pages/Register.jsx'
 import AdminLayout from './pages/admin/AdminLayout.jsx'
 import Dashboard from './pages/admin/Dashboard.jsx'
 import TouristSearch from './pages/admin/TouristSearch.jsx'
 import Incidents from './pages/admin/Incidents.jsx'
 import Analytics from './pages/admin/Analytics.jsx'
+import AuditLog from './pages/admin/AuditLog.jsx'
 import TouristApp from './pages/tourist/TouristApp.jsx'
 
 function Protected({ role, children }) {
@@ -25,6 +27,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
       <Route path="/" element={<Home />} />
 
       <Route path="/admin" element={<Protected role="admin"><AdminLayout /></Protected>}>
@@ -32,6 +35,7 @@ export default function App() {
         <Route path="tourists" element={<TouristSearch />} />
         <Route path="incidents" element={<Incidents />} />
         <Route path="analytics" element={<Analytics />} />
+        <Route path="audit" element={<AuditLog />} />
       </Route>
 
       <Route path="/app" element={<Protected role="tourist"><TouristApp /></Protected>} />

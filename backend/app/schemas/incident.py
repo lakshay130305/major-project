@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class AlertOut(BaseModel):
@@ -49,14 +49,14 @@ class IncidentOut(BaseModel):
 
 
 class IncidentStatusUpdate(BaseModel):
-    status: str  # acknowledged / dispatched / resolved
-    note: str = ""
+    status: str = Field(..., pattern="^(acknowledged|dispatched|resolved)$")
+    note: str = Field("", max_length=1000)
 
 
 class SOSRequest(BaseModel):
-    lat: float
-    lng: float
-    message: str = "SOS - emergency assistance required"
+    lat: float = Field(..., ge=-90, le=90)
+    lng: float = Field(..., ge=-180, le=180)
+    message: str = Field("SOS - emergency assistance required", max_length=500)
 
 
 class PoliceUnitOut(BaseModel):

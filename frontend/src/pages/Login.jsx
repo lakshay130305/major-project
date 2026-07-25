@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth.jsx'
+import { SHOW_DEMO_LOGINS } from '../config'
 
 const DEMO = [
   { label: 'Police / Admin', email: 'admin@tourism.gov.in', password: 'admin123' },
@@ -10,8 +11,8 @@ const DEMO = [
 export default function Login() {
   const { login } = useAuth()
   const nav = useNavigate()
-  const [email, setEmail] = useState('admin@tourism.gov.in')
-  const [password, setPassword] = useState('admin123')
+  const [email, setEmail] = useState(SHOW_DEMO_LOGINS ? 'admin@tourism.gov.in' : '')
+  const [password, setPassword] = useState(SHOW_DEMO_LOGINS ? 'admin123' : '')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -58,18 +59,24 @@ export default function Login() {
           </button>
         </form>
 
-        <div className="mt-6 border-t border-slate-100 pt-4">
-          <p className="text-xs text-slate-400 mb-2">Quick demo login:</p>
-          <div className="flex gap-2">
-            {DEMO.map((d) => (
-              <button key={d.email}
-                onClick={() => { setEmail(d.email); setPassword(d.password) }}
-                className="flex-1 text-xs border border-slate-200 rounded-lg py-2 hover:bg-slate-50">
-                {d.label}
-              </button>
-            ))}
+        {SHOW_DEMO_LOGINS && (
+          <div className="mt-6 border-t border-slate-100 pt-4">
+            <p className="text-xs text-slate-400 mb-2">Quick demo login:</p>
+            <div className="flex gap-2">
+              {DEMO.map((d) => (
+                <button key={d.email}
+                  onClick={() => { setEmail(d.email); setPassword(d.password) }}
+                  className="flex-1 text-xs border border-slate-200 rounded-lg py-2 hover:bg-slate-50">
+                  {d.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
+
+        <p className="text-center text-sm text-slate-500 mt-6">
+          New tourist? <Link to="/register" className="text-sky-600 font-medium">Register &amp; get a Digital ID</Link>
+        </p>
       </div>
     </div>
   )

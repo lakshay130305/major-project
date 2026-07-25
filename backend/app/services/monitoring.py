@@ -118,7 +118,8 @@ def process_ping(db: Session, tourist: Tourist, lat: float, lng: float,
                 Incident.tourist_id == tourist.id,
                 Incident.type == "anomaly",
                 Incident.status != "resolved",
-                Incident.detected_at >= now - timedelta(minutes=5),
+                Incident.detected_at
+                >= now - timedelta(minutes=settings.ANOMALY_INCIDENT_DEDUPE_MINUTES),
             )
             .first()
         )

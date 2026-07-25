@@ -4,8 +4,7 @@ import api from '../../api'
 import useWebSocket from '../../useWebSocket'
 import { touristIcon, sosIcon, missingIcon, policeIcon, riskColor } from '../../components/mapIcons'
 import { Stat, SeverityBadge, bandColor } from '../../components/ui.jsx'
-
-const CENTER = [26.1445, 91.7362]
+import { DEFAULT_MAP, POLL_INTERVAL_MS, loadMapConfig } from '../../config'
 
 export default function Dashboard() {
   const [tourists, setTourists] = useState([])
@@ -13,6 +12,7 @@ export default function Dashboard() {
   const [units, setUnits] = useState([])
   const [alerts, setAlerts] = useState([])
   const [summary, setSummary] = useState(null)
+  const [mapCfg, setMapCfg] = useState(DEFAULT_MAP)
 
   const load = async () => {
     const [t, z, u, a, s] = await Promise.all([
@@ -31,7 +31,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     load()
-    const iv = setInterval(load, 8000)
+    loadMapConfig((p) => api.get(p)).then(setMapCfg)
+    const iv = setInterval(load, POLL_INTERVAL_MS)
     return () => clearInterval(iv)
   }, [])
 
@@ -71,7 +72,7 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 bg-white rounded-xl shadow-sm overflow-hidden" style={{ height: 520 }}>
-          <MapContainer center={CENTER} zoom={13} style={{ height: '100%', width: '100%' }}>
+          <MapContainer center={mapCfg.center} zoom={mapCfg.zoom} style={{ height: '100%', width: '100%' }}>
             <TileLayer
               attribution='&copy; OpenStreetMap'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

@@ -15,13 +15,15 @@ and a responsive tourist mobile view.
 1. [Feature Overview](#feature-overview)
 2. [Architecture](#architecture)
 3. [Tech Stack](#tech-stack)
-4. [Project Structure](#project-structure)
-5. [Setup & Run](#setup--run)
-6. [Live Demo Mode](#live-demo-mode)
-7. [The ML Models (features, training, evaluation)](#the-ml-models)
-8. [Digital ID Hash-Chain](#digital-id-hash-chain)
-9. [API Reference](#api-reference)
-10. [Demo Accounts](#demo-accounts)
+4. [Security](#security)
+5. [Deployment (Docker, one command)](#deployment)
+6. [Project Structure](#project-structure)
+7. [Local Setup & Run](#setup--run)
+8. [Live Demo Mode](#live-demo-mode)
+9. [The ML Models (features, training, evaluation)](#the-ml-models)
+10. [Digital ID Hash-Chain](#digital-id-hash-chain)
+11. [API Reference](#api-reference)
+12. [Demo Accounts](#demo-accounts)
 
 ---
 
@@ -37,6 +39,8 @@ and a responsive tourist mobile view.
 | 6 | **Police/Admin Dashboard** | Live Leaflet map of all tourists + risk heat circles, real-time alert feed, tourist search by digital ID, **auto E-FIR** draft for missing persons, analytics charts. |
 | 7 | **Tourist Mobile View** | Responsive page: safety score gauge, zone status, itinerary tracker, SOS, nearby police, opt-in live-tracking toggle. |
 | 8 | **Incident Workflow** | Lifecycle `detected → acknowledged → dispatched → resolved`, ML/rule severity classification, response-time tracking. |
+| 9 | **Self-Registration** | Public KYC form issues a digital ID and (optionally) a login, then auto-signs the tourist in. |
+| 10 | **Security Audit Log** | Admin page + API trailing logins (with IP), SOS, and missing-person actions for accountability. |
 
 ---
 
@@ -113,6 +117,59 @@ sequenceDiagram
 - **DB:** SQLite (dev) — swap `DATABASE_URL` for PostgreSQL
 - **Frontend:** React 18, Vite, Tailwind CSS, React-Leaflet, Recharts, Axios
 - **Real-time:** native WebSockets
+- **Deploy:** Docker + docker-compose (PostgreSQL + backend + nginx-served SPA)
+
+---
+
+## Security
+
+The system is built to be deployed safely — **nothing security-sensitive is
+hardcoded** and common web-attack classes are addressed:
+
+| Area | Protection |
+|------|------------|
+| **Secrets** | `SECRET_KEY` is env-only; the app **refuses to start in production** without a strong key. Dev auto-generates an ephemeral key. |
+| **Authentication** | JWT (HS256) with `iat`/`nbf`/`exp`/`jti` claims and a token `type` guard; bcrypt (cost 12) password hashing. |
+| **Authorization** | Role-based (`admin` / `tourist`). Tourists can only read/act on **their own** record (`require_self_or_admin`); admin-only routes for dashboards, incidents, audit, E-FIR. |
+| **Brute-force** | Per-IP **rate limiting** — strict on `/auth/login` (429 after N attempts), coarse global limit on every API route. |
+| **WebSocket** | The live feed carries tourist PII, so the socket **requires a valid admin token** (rejected otherwise). |
+| **Input validation** | Pydantic bounds on every input: lat∈[-90,90], lng∈[-180,180], speed caps, string length limits, polygon vertex validation, enum-checked fields, trip-date sanity. |
+| **Injection** | SQLAlchemy ORM (parameterised) throughout — no string-built SQL. |
+| **Transport headers** | `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`, a restrictive **CSP**, and **HSTS** in production. |
+| **Host / CORS** | `TrustedHostMiddleware` (explicit `ALLOWED_HOSTS`) + locked-down CORS origins/methods/headers. |
+| **DoS surface** | Request **body-size limit** (413 on oversized payloads). |
+| **Auditability** | A **security audit log** records logins (success/failure + IP), SOS, and missing-person actions, viewable in the admin **Audit Log** page. |
+| **Least privilege** | Backend Docker image runs as a **non-root** user; interactive API docs are disabled in production. |
+| **Privacy** | Documents stored masked/mock; live location tracking is **opt-in** by the tourist. |
+
+> Single-instance note: the rate limiter and WebSocket manager are in-process. For
+> a horizontally-scaled deployment, back them with **Redis** (pub/sub + shared
+> counters) and run multiple workers; the code is structured to swap these in.
+
+---
+
+## Deployment
+
+**One command** brings up PostgreSQL, the API, and the nginx-served SPA:
+
+```bash
+cp .env.example .env
+# generate and paste a strong key:
+python -c "import secrets; print(secrets.token_urlsafe(48))"   # -> SECRET_KEY in .env
+docker compose up --build
+```
+
+Then open **http://localhost:8080**. The backend trains its ML models at image
+build time and (by default) seeds demo data on first boot (`SEED_ON_START=true`).
+
+What compose runs:
+- **db** — PostgreSQL 16 with a persistent volume + healthcheck
+- **backend** — FastAPI (non-root, single worker) reading all config from env
+- **frontend** — React build served by nginx, proxying `/api` and `/ws` to the backend
+
+For a real deployment set `ENVIRONMENT=production`, an explicit `ALLOWED_HOSTS`,
+your real `CORS_ORIGINS`, `SEED_ON_START=false`, and put a TLS-terminating reverse
+proxy in front. Every tunable lives in `.env` / `backend/.env.example` — no code edits.
 
 ---
 
@@ -276,8 +333,9 @@ Interactive docs at **`/docs`** (Swagger). Key endpoints:
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST | `/api/auth/login` | JWT login (OAuth2 password flow) |
-| POST | `/api/tourists` | Register tourist + mint digital ID |
+| GET | `/api/health` · `/api/config` | Health check · public map config (no secrets) |
+| POST | `/api/auth/login` | JWT login (OAuth2 password flow, rate-limited) |
+| POST | `/api/tourists` | Self-register tourist + mint digital ID |
 | GET | `/api/tourists/{id}/qr` | QR code (base64 PNG) |
 | GET | `/api/tourists/{id}/chain/verify` | Verify hash chain integrity |
 | POST | `/api/tourists/{id}/location` | Ingest GPS ping → full pipeline |
@@ -288,7 +346,8 @@ Interactive docs at **`/docs`** (Swagger). Key endpoints:
 | GET | `/api/alerts` | Alert feed |
 | GET/PATCH | `/api/incidents` | Incident list / advance lifecycle |
 | GET | `/api/analytics/*` | Summary, over-time, by-type, zone-risk, severity |
-| WS | `/ws/alerts` | Live alert/location/incident stream |
+| GET | `/api/audit-log` | Security audit trail (admin only) |
+| WS | `/ws/alerts?token=…` | Live alert/location/incident stream (admin token required) |
 
 ---
 

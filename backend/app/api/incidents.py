@@ -1,11 +1,12 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, require_admin, require_self_or_admin
 from app.db.session import get_db
 from app.models.alert import Alert
+from app.models.audit import AuditLog
 from app.models.incident import Incident, IncidentEvent
 from app.models.police import PoliceUnit
 from app.models.tourist import Tourist
@@ -17,6 +18,7 @@ from app.schemas.incident import (
     PoliceUnitOut,
     SOSRequest,
 )
+from app.services import audit
 from app.services.efir import generate_efir
 from app.services.monitoring import trigger_sos
 
@@ -47,12 +49,15 @@ def ack_alert(alert_id: int, db: Session = Depends(get_db), _: User = Depends(re
 
 # ---------------- SOS ----------------
 @router.post("/tourists/{tourist_id}/sos")
-def sos(tourist_id: int, payload: SOSRequest, db: Session = Depends(get_db),
-        user: User = Depends(get_current_user)):
+def sos(tourist_id: int, payload: SOSRequest, request: Request,
+        db: Session = Depends(get_db), user: User = Depends(require_self_or_admin)):
     t = db.get(Tourist, tourist_id)
     if not t:
         raise HTTPException(status_code=404, detail="Tourist not found")
-    return trigger_sos(db, t, payload.lat, payload.lng, payload.message)
+    result = trigger_sos(db, t, payload.lat, payload.lng, payload.message)
+    audit.record(db, "sos", actor=user.email, target=t.digital_id,
+                 detail=payload.message, request=request)
+    return result
 
 
 # ---------------- incidents ----------------
@@ -109,11 +114,13 @@ def incident_efir(incident_id: int, db: Session = Depends(get_db),
 
 
 @router.post("/tourists/{tourist_id}/mark-missing")
-def mark_missing(tourist_id: int, db: Session = Depends(get_db), _: User = Depends(require_admin)):
+def mark_missing(tourist_id: int, request: Request, db: Session = Depends(get_db),
+                 user: User = Depends(require_admin)):
     t = db.get(Tourist, tourist_id)
     if not t:
         raise HTTPException(status_code=404, detail="Tourist not found")
     t.status = "missing"
+    audit.record(db, "mark_missing", actor=user.email, target=t.digital_id, request=request)
     inc = Incident(tourist_id=t.id, type="missing_person", severity="critical",
                    status="detected", description=f"{t.full_name} reported missing",
                    lat=t.last_lat, lng=t.last_lng)
@@ -129,3 +136,15 @@ def mark_missing(tourist_id: int, db: Session = Depends(get_db), _: User = Depen
 @router.get("/police-units", response_model=list[PoliceUnitOut])
 def list_units(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     return db.query(PoliceUnit).all()
+
+
+# ---------------- audit log (admin only) ----------------
+@router.get("/audit-log")
+def audit_log(limit: int = 100, db: Session = Depends(get_db),
+              _: User = Depends(require_admin)):
+    rows = db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(min(limit, 500)).all()
+    return [
+        {"timestamp": r.timestamp.isoformat(), "actor": r.actor, "action": r.action,
+         "target": r.target, "ip": r.ip, "outcome": r.outcome, "detail": r.detail}
+        for r in rows
+    ]

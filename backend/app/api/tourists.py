@@ -9,7 +9,7 @@ import qrcode
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_admin
+from app.api.deps import get_current_user, require_admin, require_self_or_admin
 from app.core.security import hash_password
 from app.db.session import get_db
 from app.models.tourist import IdBlock, LocationPing, Tourist
@@ -111,7 +111,8 @@ def get_by_digital_id(digital_id: str, db: Session = Depends(get_db),
 
 
 @router.get("/{tourist_id}/qr")
-def get_qr(tourist_id: int, db: Session = Depends(get_db)):
+def get_qr(tourist_id: int, db: Session = Depends(get_db),
+           _: User = Depends(require_self_or_admin)):
     """Return a base64 PNG QR code encoding the digital ID + validity."""
     t = db.get(Tourist, tourist_id)
     if not t:
@@ -130,7 +131,7 @@ def get_qr(tourist_id: int, db: Session = Depends(get_db)):
 
 @router.get("/{tourist_id}/chain", response_model=list[IdBlockOut])
 def get_chain(tourist_id: int, db: Session = Depends(get_db),
-              user: User = Depends(get_current_user)):
+              _: User = Depends(require_self_or_admin)):
     return (
         db.query(IdBlock)
         .filter(IdBlock.tourist_id == tourist_id)
@@ -140,12 +141,14 @@ def get_chain(tourist_id: int, db: Session = Depends(get_db),
 
 
 @router.get("/{tourist_id}/chain/verify")
-def verify_chain(tourist_id: int, db: Session = Depends(get_db)):
+def verify_chain(tourist_id: int, db: Session = Depends(get_db),
+                 _: User = Depends(require_self_or_admin)):
     return hashchain.verify_chain(db, tourist_id)
 
 
 @router.post("/{tourist_id}/location")
-def update_location(tourist_id: int, payload: LocationUpdate, db: Session = Depends(get_db)):
+def update_location(tourist_id: int, payload: LocationUpdate, db: Session = Depends(get_db),
+                    _: User = Depends(require_self_or_admin)):
     """Ingest a GPS ping through the full monitoring pipeline."""
     t = db.get(Tourist, tourist_id)
     if not t:
@@ -155,7 +158,7 @@ def update_location(tourist_id: int, payload: LocationUpdate, db: Session = Depe
 
 @router.get("/{tourist_id}/safety-score", response_model=SafetyScoreOut)
 def get_safety_score(tourist_id: int, db: Session = Depends(get_db),
-                     user: User = Depends(get_current_user)):
+                     _: User = Depends(require_self_or_admin)):
     t = db.get(Tourist, tourist_id)
     if not t:
         raise HTTPException(status_code=404, detail="Tourist not found")
@@ -172,7 +175,7 @@ def get_safety_score(tourist_id: int, db: Session = Depends(get_db),
 
 @router.post("/{tourist_id}/tracking")
 def toggle_tracking(tourist_id: int, enabled: bool, db: Session = Depends(get_db),
-                    user: User = Depends(get_current_user)):
+                    _: User = Depends(require_self_or_admin)):
     t = db.get(Tourist, tourist_id)
     if not t:
         raise HTTPException(status_code=404, detail="Tourist not found")
@@ -183,7 +186,7 @@ def toggle_tracking(tourist_id: int, enabled: bool, db: Session = Depends(get_db
 
 @router.get("/{tourist_id}/pings")
 def get_pings(tourist_id: int, limit: int = 100, db: Session = Depends(get_db),
-              user: User = Depends(get_current_user)):
+              _: User = Depends(require_self_or_admin)):
     pings = (
         db.query(LocationPing)
         .filter(LocationPing.tourist_id == tourist_id)

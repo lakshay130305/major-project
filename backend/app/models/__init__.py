@@ -5,6 +5,7 @@ from app.models.zone import Zone
 from app.models.incident import Incident, IncidentEvent
 from app.models.alert import Alert
 from app.models.police import PoliceUnit
+from app.models.audit import AuditLog
 
 __all__ = [
     "User",
@@ -16,4 +17,5 @@ __all__ = [
     "IncidentEvent",
     "Alert",
     "PoliceUnit",
+    "AuditLog",
 ]

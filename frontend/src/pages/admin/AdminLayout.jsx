@@ -6,6 +6,7 @@ const links = [
   { to: '/admin/tourists', label: 'Tourists', icon: '🧳' },
   { to: '/admin/incidents', label: 'Incidents', icon: '🚨' },
   { to: '/admin/analytics', label: 'Analytics', icon: '📊' },
+  { to: '/admin/audit', label: 'Audit Log', icon: '🔐' },
 ]
 
 export default function AdminLayout() {

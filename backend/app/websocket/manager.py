@@ -10,6 +10,11 @@ class ConnectionManager:
     def __init__(self) -> None:
         self.active: list[WebSocket] = []
         self._lock = asyncio.Lock()
+        self._loop: asyncio.AbstractEventLoop | None = None
+
+    def bind_loop(self, loop: asyncio.AbstractEventLoop) -> None:
+        """Called once at app startup so sync code can schedule onto this loop."""
+        self._loop = loop
 
     async def connect(self, ws: WebSocket) -> None:
         await ws.accept()
@@ -37,13 +42,15 @@ manager = ConnectionManager()
 
 
 def broadcast_sync(message: dict[str, Any]) -> None:
-    """Fire-and-forget broadcast callable from sync request handlers."""
+    """Fire-and-forget broadcast callable from sync request handlers/threads.
+
+    FastAPI runs sync endpoints in a threadpool, so we schedule the coroutine onto
+    the main event loop captured at startup (thread-safe). No-op if no loop/clients.
+    """
+    loop = manager._loop
+    if loop is None or not manager.active:
+        return
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            loop.create_task(manager.broadcast(message))
-        else:
-            loop.run_until_complete(manager.broadcast(message))
+        asyncio.run_coroutine_threadsafe(manager.broadcast(message), loop)
     except RuntimeError:
-        # No running loop (e.g. called from a script) — ignore.
         pass

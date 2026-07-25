@@ -6,6 +6,7 @@ import { useAuth } from '../../auth.jsx'
 import { ScoreGauge, Card } from '../../components/ui.jsx'
 import { touristIcon, policeIcon, riskColor } from '../../components/mapIcons'
 import { haversineKm } from '../../components/geo'
+import { TRACK_INTERVAL_MS } from '../../config'
 
 export default function TouristApp() {
   const { user, logout } = useAuth()
@@ -48,7 +49,7 @@ export default function TouristApp() {
         setToast(`⚠ ${data.alerts_raised.join(', ').replace(/_/g, ' ')}`)
         setTimeout(() => setToast(null), 4000)
       }
-    }, 5000)
+    }, TRACK_INTERVAL_MS)
     return () => clearInterval(iv)
   }, [tracking, me?.id])
 
