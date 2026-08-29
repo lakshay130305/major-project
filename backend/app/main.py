@@ -3,13 +3,17 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_fastapi_instrumentator import Instrumentator
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api import analytics, auth, devices, incidents, ml, tourists, ws, zones
 from app.core.config import settings
+from app.core.logging import RequestIDMiddleware, configure_logging
 from app.core.middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
 from app.core.ratelimit import global_rate_limit
 from app.db.session import init_db
+
+configure_logging(json_output=settings.is_production)
 
 
 @asynccontextmanager
@@ -33,6 +37,7 @@ app = FastAPI(
 )
 
 # ---- middleware (order matters: outermost first) ----
+app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(BodySizeLimitMiddleware)
 if settings.allowed_hosts_list and settings.allowed_hosts_list != ["*"]:
@@ -80,3 +85,7 @@ app.include_router(analytics.router, prefix=PREFIX, dependencies=_rl)
 app.include_router(ml.router, prefix=PREFIX, dependencies=_rl)
 app.include_router(devices.router, prefix=PREFIX, dependencies=_rl)
 app.include_router(ws.router)  # websocket at /ws/alerts (auth via token query param)
+
+# /api/metrics — Prometheus scrape target. Excluded from request logging noise
+# and from the app's own docs since it's operational, not part of the domain API.
+Instrumentator().instrument(app).expose(app, endpoint="/api/metrics", include_in_schema=False)

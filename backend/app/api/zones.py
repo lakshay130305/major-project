@@ -8,6 +8,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.models.zone import Zone
 from app.schemas.zone import ZoneCreate, ZoneOut
+from app.services import geo
 
 router = APIRouter(prefix="/zones", tags=["zones"])
 
@@ -46,3 +47,4 @@ def delete_zone(zone_id: int, db: Session = Depends(get_db), _: User = Depends(r
         raise HTTPException(status_code=404, detail="Zone not found")
     db.delete(z)
     db.commit()
+    geo.clear_polygon_cache()

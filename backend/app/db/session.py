@@ -1,16 +1,51 @@
 """SQLAlchemy engine, session factory and declarative base."""
 import logging
 
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
+_is_sqlite = settings.DATABASE_URL.startswith("sqlite")
+connect_args = {"check_same_thread": False} if _is_sqlite else {}
 
-engine = create_engine(settings.DATABASE_URL, connect_args=connect_args, echo=False)
+# SQLAlchemy's default pool (size=5, max_overflow=10 -> 15 total) is sized for
+# a real database server, not for a single-file SQLite database serving many
+# request-handling threads. Under load-testing this backend, the default pool
+# caused most concurrent requests to queue for a connection and eventually
+# time out -- appearing as a pipeline slowdown when it was actually pool
+# starvation. SQLite itself is the real ceiling under concurrent writes
+# (readers/writers still serialize at the file level even in WAL mode), so
+# this is a dev/demo mitigation, not a claim that SQLite scales -- see
+# docker-compose.yml, which already defaults to PostgreSQL in production.
+engine = create_engine(
+    settings.DATABASE_URL,
+    connect_args=connect_args,
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_POOL_MAX_OVERFLOW,
+    echo=False,
+)
+
+if _is_sqlite:
+    @event.listens_for(engine, "connect")
+    def _sqlite_pragmas(dbapi_connection, _record) -> None:
+        # WAL lets readers proceed while a write is in progress instead of
+        # blocking behind SQLite's default rollback-journal exclusive lock --
+        # the single biggest concurrency win available without changing engines.
+        # busy_timeout matters just as much: SQLite's default is 0, so a
+        # second concurrent WRITER (WAL only helps readers-vs-writer, not
+        # writer-vs-writer) raises "database is locked" immediately instead of
+        # waiting its turn. Load-testing this backend surfaced exactly that --
+        # concurrent geofence/anomaly alert inserts failing outright under
+        # load. A timeout turns that hard failure into a bounded wait.
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA synchronous=NORMAL")
+        cursor.execute("PRAGMA busy_timeout=10000")
+        cursor.close()
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

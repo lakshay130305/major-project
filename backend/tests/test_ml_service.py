@@ -69,3 +69,33 @@ def test_night_hours_reduce_the_score(no_models):
     day = ml_service.predict_safety_score(ml_service.safety_features(20, 13, 0.1, 20, 10))
     night = ml_service.predict_safety_score(ml_service.safety_features(20, 2, 0.1, 20, 10))
     assert night < day
+
+
+def test_concurrent_first_load_is_thread_safe(tmp_path, monkeypatch):
+    """Regression test for a real deadlock found under load-testing: many
+    threads racing to load an artifact for the first time must not corrupt
+    the cache or crash -- they should all end up with the same loaded object."""
+    import threading
+
+    import joblib
+
+    monkeypatch.setattr(ml_service, "_cache", {})
+    model_path = tmp_path / "fake_model.joblib"
+    joblib.dump({"marker": "loaded"}, model_path)
+    monkeypatch.setattr(ml_service.settings, "ML_MODELS_DIR", str(tmp_path))
+
+    results = []
+    barrier = threading.Barrier(16)
+
+    def worker():
+        barrier.wait()  # maximise the chance every thread hits the race window
+        results.append(ml_service._load("fake_model.joblib"))
+
+    threads = [threading.Thread(target=worker) for _ in range(16)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=5)
+
+    assert len(results) == 16
+    assert all(r == {"marker": "loaded"} for r in results)

@@ -7,6 +7,7 @@ the API never crashes during a demo.
 from __future__ import annotations
 
 import os
+import threading
 from typing import Any
 
 import numpy as np
@@ -14,6 +15,15 @@ import numpy as np
 from app.core.config import settings
 
 _cache: dict[str, Any] = {}
+# Guards the *first* load of each artifact. FastAPI runs sync endpoints in a
+# threadpool, so under concurrent load several request threads can reach an
+# empty `_cache` at once. `joblib.load()` on a first call triggers Python's
+# import machinery to pull in sklearn's compiled submodules; several threads
+# doing that concurrently for the first time can trip CPython's import lock
+# into `_DeadlockError` (observed under locust load-testing this endpoint).
+# A plain lock serializes the load -- once cached, later calls hit the dict
+# directly and never touch the lock, so steady-state inference is unaffected.
+_load_lock = threading.Lock()
 
 
 def _path(name: str) -> str:
@@ -22,10 +32,12 @@ def _path(name: str) -> str:
 
 def _load(name: str):
     if name not in _cache:
-        import joblib
+        with _load_lock:
+            if name not in _cache:  # re-check: another thread may have won the race
+                import joblib
 
-        p = _path(name)
-        _cache[name] = joblib.load(p) if os.path.exists(p) else None
+                p = _path(name)
+                _cache[name] = joblib.load(p) if os.path.exists(p) else None
     return _cache[name]
 
 

@@ -6,6 +6,7 @@ from datetime import timedelta
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.logging import get_logger
 from app.core.time import utc_now
 from app.models.alert import Alert
 from app.models.incident import Incident, IncidentEvent
@@ -19,6 +20,8 @@ from app.services.geo import (
 )
 from app.services.safety import compute_safety_score
 from app.websocket.manager import broadcast_sync
+
+logger = get_logger(__name__)
 
 _RISK_SEVERITY = {"low": "low", "medium": "medium", "high": "high", "restricted": "critical"}
 
@@ -90,6 +93,10 @@ def process_ping(db: Session, tourist: Tourist, lat: float, lng: float,
     # ---- anomaly detection (IsolationForest) ----
     feats = ml_service.anomaly_features(speed_kmh, dist_prev, dt, dist_route)
     anomaly = ml_service.score_anomaly(feats)
+    logger.info(
+        "anomaly_scored", tourist_id=tourist.id, features=feats,
+        is_anomaly=anomaly["is_anomaly"], score=anomaly["score"],
+    )
 
     ping = LocationPing(
         tourist_id=tourist.id, lat=lat, lng=lng, speed_kmh=speed_kmh,
@@ -214,6 +221,7 @@ def trigger_sos(db: Session, tourist: Tourist, lat: float, lng: float, message: 
     """One-tap SOS: mark tourist, find nearest available police unit, open critical incident."""
     from app.models.police import PoliceUnit
 
+    logger.warning("sos_triggered", tourist_id=tourist.id, lat=lat, lng=lng)
     tourist.status = "sos"
     tourist.last_lat, tourist.last_lng = lat, lng
     tourist.last_seen = utc_now()

@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     # ---- database ----
     # SQLite for dev; set DATABASE_URL=postgresql+psycopg://user:pass@host/db in prod
     DATABASE_URL: str = "sqlite:///./tourist_safety.db"
+    DB_POOL_SIZE: int = 20
+    DB_POOL_MAX_OVERFLOW: int = 20
 
     # ---- auth / JWT ----
     # Leave empty to auto-generate an ephemeral key in dev (tokens reset on restart).

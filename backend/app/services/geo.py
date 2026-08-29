@@ -1,6 +1,7 @@
 """Geospatial helpers: haversine distance, point-in-polygon, route deviation."""
 import json
 import math
+from functools import lru_cache
 
 from shapely.geometry import Point, Polygon
 
@@ -18,14 +19,35 @@ def haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return 2 * EARTH_RADIUS_M * math.asin(math.sqrt(a))
 
 
-def point_in_zone(lat: float, lng: float, zone: Zone) -> bool:
-    """Point-in-polygon test using shapely. Polygon is stored as [[lat,lng],...]."""
-    verts = json.loads(zone.polygon)
+@lru_cache(maxsize=512)
+def _compiled_polygon(zone_id: int, polygon_json: str) -> Polygon | None:
+    """Parse+build a shapely Polygon once per (zone, geometry) pair.
+
+    `process_ping` calls `zones_containing_point` on every single GPS ping, which
+    used to re-parse the stored JSON and reconstruct a shapely Polygon from
+    scratch on every call, for every zone, on every ping -- pure waste, since a
+    zone's geometry almost never changes between pings. Keying the cache on the
+    polygon's own JSON (not just the zone id) means an edited zone gets a fresh
+    cache entry for free, with no invalidation bookkeeping needed.
+    """
+    verts = json.loads(polygon_json)
     if len(verts) < 3:
-        return False
+        return None
     # shapely uses (x=lng, y=lat)
-    poly = Polygon([(v[1], v[0]) for v in verts])
+    return Polygon([(v[1], v[0]) for v in verts])
+
+
+def point_in_zone(lat: float, lng: float, zone: Zone) -> bool:
+    """Point-in-polygon test using a cached, pre-built shapely Polygon."""
+    poly = _compiled_polygon(zone.id, zone.polygon)
+    if poly is None:
+        return False
     return poly.contains(Point(lng, lat))
+
+
+def clear_polygon_cache() -> None:
+    """Drop cached polygons. Used by tests and after bulk zone edits."""
+    _compiled_polygon.cache_clear()
 
 
 def zones_containing_point(lat: float, lng: float, zones: list[Zone]) -> list[Zone]:

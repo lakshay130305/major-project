@@ -5,11 +5,13 @@ import json
 import uuid
 
 import qrcode
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_admin, require_self_or_admin
 from app.core.config import settings
+from app.core.pagination import PageParams
 from app.core.ratelimit import registration_rate_limit
 from app.core.security import hash_password
 from app.db.session import get_db
@@ -104,8 +106,12 @@ def register_tourist(payload: TouristCreate, db: Session = Depends(get_db)):
 
 
 @router.get("", response_model=list[TouristOut])
-def list_tourists(db: Session = Depends(get_db), _: User = Depends(require_admin)):
-    return [_serialize(t) for t in db.query(Tourist).all()]
+def list_tourists(response: Response, page: PageParams = Depends(),
+                  db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    total = db.query(func.count(Tourist.id)).scalar()
+    response.headers["X-Total-Count"] = str(total)
+    rows = page.apply(db.query(Tourist).order_by(Tourist.id)).all()
+    return [_serialize(t) for t in rows]
 
 
 @router.get("/{tourist_id}", response_model=TouristOut)

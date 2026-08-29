@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_admin, require_self_or_admin
+from app.core.pagination import PageParams
 from app.core.time import utc_now
 from app.db.session import get_db
 from app.models.alert import Alert
@@ -64,12 +66,14 @@ def sos(tourist_id: int, payload: SOSRequest, request: Request,
 
 # ---------------- incidents ----------------
 @router.get("/incidents", response_model=list[IncidentOut])
-def list_incidents(status: str | None = None, db: Session = Depends(get_db),
+def list_incidents(response: Response, status: str | None = None,
+                   page: PageParams = Depends(), db: Session = Depends(get_db),
                    _: User = Depends(require_admin)):
     q = db.query(Incident)
     if status:
         q = q.filter(Incident.status == status)
-    return q.order_by(Incident.detected_at.desc()).all()
+    response.headers["X-Total-Count"] = str(q.with_entities(func.count(Incident.id)).scalar())
+    return page.apply(q.order_by(Incident.detected_at.desc())).all()
 
 
 @router.get("/incidents/{incident_id}", response_model=IncidentOut)
