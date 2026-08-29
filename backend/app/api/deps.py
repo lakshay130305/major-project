@@ -1,10 +1,11 @@
 """Shared FastAPI dependencies: current user resolution & role guards."""
-from fastapi import Depends, HTTPException, Path, status
+from fastapi import Depends, Header, HTTPException, Path, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
-from app.core.security import decode_access_token
+from app.core.security import decode_access_token, verify_password
 from app.db.session import get_db
+from app.models.device import Device
 from app.models.user import User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
@@ -57,3 +58,20 @@ def authenticate_ws_token(token: str | None, db: Session) -> User | None:
         return _user_from_token(token, db)
     except HTTPException:
         return None
+
+
+def authenticate_device(
+    x_device_key: str = Header(..., alias="X-Device-Key"),
+    device_id: str = Path(...),
+    db: Session = Depends(get_db),
+) -> Device:
+    """Authenticate an IoT band by its per-device API key.
+
+    A wearable cannot hold a user login session, so it authenticates with its
+    own long-lived credential (hashed with the same bcrypt path as a user
+    password) instead of a JWT.
+    """
+    device = db.query(Device).filter(Device.device_id == device_id).first()
+    if device is None or not device.active or not verify_password(x_device_key, device.hashed_key):
+        raise HTTPException(status_code=401, detail="Invalid device credentials")
+    return device

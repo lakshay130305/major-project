@@ -7,6 +7,7 @@ const links = [
   { to: '/admin/incidents', label: 'Incidents', icon: '🚨' },
   { to: '/admin/analytics', label: 'Analytics', icon: '📊' },
   { to: '/admin/model-insights', label: 'Model Insights', icon: '🧠' },
+  { to: '/admin/devices', label: 'Devices', icon: '⌚' },
   { to: '/admin/audit', label: 'Audit Log', icon: '🔐' },
 ]
 

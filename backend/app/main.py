@@ -5,7 +5,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from app.api import analytics, auth, incidents, ml, tourists, ws, zones
+from app.api import analytics, auth, devices, incidents, ml, tourists, ws, zones
 from app.core.config import settings
 from app.core.middleware import BodySizeLimitMiddleware, SecurityHeadersMiddleware
 from app.core.ratelimit import global_rate_limit
@@ -78,4 +78,5 @@ app.include_router(zones.router, prefix=PREFIX, dependencies=_rl)
 app.include_router(incidents.router, prefix=PREFIX, dependencies=_rl)
 app.include_router(analytics.router, prefix=PREFIX, dependencies=_rl)
 app.include_router(ml.router, prefix=PREFIX, dependencies=_rl)
+app.include_router(devices.router, prefix=PREFIX, dependencies=_rl)
 app.include_router(ws.router)  # websocket at /ws/alerts (auth via token query param)

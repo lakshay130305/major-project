@@ -70,3 +70,21 @@ class PoliceUnitOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class EFIROut(BaseModel):
+    id: int
+    fir_number: str
+    incident_id: int
+    tourist_id: int
+    status: str
+    narrative: str
+    last_known_lat: float | None
+    last_known_lng: float | None
+    last_seen_at: datetime | None
+    document_hash: str
+    filed_at: datetime
+    closed_at: datetime | None
+
+    class Config:
+        from_attributes = True

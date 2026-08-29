@@ -1,6 +1,8 @@
 """Import all models so SQLAlchemy's metadata registers them."""
 from app.models.alert import Alert
 from app.models.audit import AuditLog
+from app.models.device import Device
+from app.models.efir import EFIR
 from app.models.incident import Incident, IncidentEvent
 from app.models.police import PoliceUnit
 from app.models.tourist import IdBlock, LocationPing, Tourist
@@ -18,4 +20,6 @@ __all__ = [
     "Alert",
     "PoliceUnit",
     "AuditLog",
+    "Device",
+    "EFIR",
 ]

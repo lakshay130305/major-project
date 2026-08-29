@@ -173,6 +173,43 @@ def process_ping(db: Session, tourist: Tourist, lat: float, lng: float,
     }
 
 
+# Simple resting-heart-rate bounds. A real deployment would baseline per
+# tourist (age, fitness); flat bounds are the same "explainable rule" spirit as
+# the anomaly-detector's fallback path, and keep the demo self-contained.
+_HR_LOW_BPM, _HR_HIGH_BPM = 40, 160
+
+
+def process_device_telemetry(
+    db: Session, tourist: Tourist, lat: float, lng: float, speed_kmh: float,
+    heart_rate_bpm: float | None, sos_pressed: bool, fall_detected: bool,
+) -> dict:
+    """IoT-band telemetry: the same location pipeline as a phone ping, plus
+    device-only signals a phone doesn't have (heart rate, a fall accelerometer
+    trip, a physical SOS button)."""
+    result = process_ping(db, tourist, lat, lng, speed_kmh)
+    alerts_raised = result["alerts_raised"]
+
+    if fall_detected:
+        _create_alert(db, tourist.id, "fall_detected", "critical",
+                      "Fall detected by wearable device", lat, lng)
+        _open_incident(db, tourist, "fall_detected", "critical",
+                       f"Possible fall detected by {tourist.full_name}'s band", lat, lng)
+        alerts_raised.append("fall_detected")
+
+    if heart_rate_bpm is not None and not (_HR_LOW_BPM <= heart_rate_bpm <= _HR_HIGH_BPM):
+        _create_alert(db, tourist.id, "health_anomaly", "high",
+                      f"Abnormal heart rate: {heart_rate_bpm:.0f} bpm", lat, lng)
+        alerts_raised.append("health_anomaly")
+
+    db.commit()
+
+    if sos_pressed:
+        result["sos"] = trigger_sos(db, tourist, lat, lng,
+                                    "SOS button pressed on wearable device")
+
+    return result
+
+
 def trigger_sos(db: Session, tourist: Tourist, lat: float, lng: float, message: str) -> dict:
     """One-tap SOS: mark tourist, find nearest available police unit, open critical incident."""
     from app.models.police import PoliceUnit

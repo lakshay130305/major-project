@@ -5,7 +5,10 @@ from sqlalchemy.orm import Session
 
 from app.core.time import utc_now
 from app.models.alert import Alert
+from app.models.efir import EFIR
+from app.models.incident import Incident
 from app.models.tourist import Tourist
+from app.services import efir_pdf, hashchain
 
 
 def generate_efir(db: Session, tourist: Tourist) -> dict:
@@ -70,3 +73,39 @@ def generate_efir(db: Session, tourist: Tourist) -> dict:
         "anomaly_timeline": timeline,
         "narrative": narrative,
     }
+
+
+def file_efir(db: Session, incident: Incident, tourist: Tourist) -> EFIR:
+    """Persist and file an EFIR for a missing-person incident.
+
+    Filing does three things atomically: writes the EFIR row, computes its
+    content hash, and appends that hash to the tourist's own tamper-evident ID
+    chain as an EFIR_FILED block -- so the filing itself becomes part of the
+    same evidence trail as the digital ID, and a later edit to the stored
+    narrative is detectable the same way a forged ID block would be.
+    """
+    preview = generate_efir(db, tourist)
+    fir_number = f"{preview['fir_number']}-{incident.id}"
+
+    efir = EFIR(
+        fir_number=fir_number,
+        incident_id=incident.id,
+        tourist_id=tourist.id,
+        narrative=preview["narrative"],
+        last_known_lat=tourist.last_lat,
+        last_known_lng=tourist.last_lng,
+        last_seen_at=tourist.last_seen,
+        document_hash="",  # filled below, once the row has its final field values
+    )
+    db.add(efir)
+    db.flush()
+
+    efir.document_hash = efir_pdf.compute_document_hash(efir, tourist)
+    db.flush()
+
+    hashchain.append_block(db, tourist, "EFIR_FILED", {
+        "fir_number": efir.fir_number,
+        "incident_id": incident.id,
+        "document_hash": efir.document_hash,
+    })
+    return efir

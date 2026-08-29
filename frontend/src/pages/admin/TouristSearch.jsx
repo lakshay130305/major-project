@@ -27,8 +27,16 @@ export default function TouristSearch() {
 
   const genEfir = async () => {
     const r = await api.post(`/tourists/${selected.id}/mark-missing`)
-    setEfir(r.data.efir)
+    setEfir({ ...r.data.efir, id: r.data.efir_id, fir_number: r.data.fir_number })
     setSelected({ ...selected, status: 'missing' })
+  }
+
+  const downloadEfirPdf = async () => {
+    const { data } = await api.get(`/efirs/${efir.id}/pdf`, { responseType: 'blob' })
+    const url = URL.createObjectURL(data)
+    window.open(url, '_blank')
+    // Revoke shortly after — the new tab has already loaded the blob by then.
+    setTimeout(() => URL.revokeObjectURL(url), 30_000)
   }
 
   const filtered = tourists.filter((t) =>
@@ -114,9 +122,17 @@ export default function TouristSearch() {
             </div>
 
             {efir && (
-              <Card title={`E-FIR Draft — ${efir.fir_number}`}>
+              <Card title={`E-FIR — ${efir.fir_number}`}
+                actions={
+                  <button onClick={downloadEfirPdf}
+                    className="text-xs bg-slate-800 hover:bg-slate-700 text-white font-semibold px-3 py-1.5 rounded-lg">
+                    Download PDF
+                  </button>
+                }>
                 <div className="text-sm space-y-2">
-                  <div className="inline-block bg-yellow-100 text-yellow-800 text-xs px-2 py-0.5 rounded-full">{efir.status}</div>
+                  <div className="inline-block bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded-full">
+                    FILED · hash-chained to digital ID
+                  </div>
                   <p className="text-slate-700 leading-relaxed">{efir.narrative}</p>
                   <div className="mt-2">
                     <div className="font-semibold text-slate-700 mb-1">Anomaly / Alert Timeline</div>
