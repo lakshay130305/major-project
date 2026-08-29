@@ -7,6 +7,7 @@ import Dashboard from './pages/admin/Dashboard.jsx'
 import TouristSearch from './pages/admin/TouristSearch.jsx'
 import Incidents from './pages/admin/Incidents.jsx'
 import Analytics from './pages/admin/Analytics.jsx'
+import ModelInsights from './pages/admin/ModelInsights.jsx'
 import AuditLog from './pages/admin/AuditLog.jsx'
 import TouristApp from './pages/tourist/TouristApp.jsx'
 
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="tourists" element={<TouristSearch />} />
         <Route path="incidents" element={<Incidents />} />
         <Route path="analytics" element={<Analytics />} />
+        <Route path="model-insights" element={<ModelInsights />} />
         <Route path="audit" element={<AuditLog />} />
       </Route>
 

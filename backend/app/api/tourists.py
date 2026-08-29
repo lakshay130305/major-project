@@ -3,13 +3,14 @@ import hashlib
 import io
 import json
 import uuid
-from datetime import datetime
 
 import qrcode
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_admin, require_self_or_admin
+from app.core.config import settings
+from app.core.ratelimit import registration_rate_limit
 from app.core.security import hash_password
 from app.db.session import get_db
 from app.models.tourist import IdBlock, LocationPing, Tourist
@@ -35,15 +36,32 @@ def _generate_digital_id(name: str) -> str:
 
 
 def _serialize(t: Tourist) -> dict:
+    """Explicit field list -- `t.__dict__` leaked `_sa_instance_state` and would
+    silently expose any future column added to the model."""
     return {
-        **t.__dict__,
+        "id": t.id,
+        "digital_id": t.digital_id,
+        "full_name": t.full_name,
+        "nationality": t.nationality,
+        "document_type": t.document_type,
+        "document_number": t.document_number,
+        "phone": t.phone,
         "itinerary": json.loads(t.itinerary or "[]"),
         "emergency_contacts": json.loads(t.emergency_contacts or "[]"),
+        "trip_start": t.trip_start,
+        "trip_end": t.trip_end,
+        "last_lat": t.last_lat,
+        "last_lng": t.last_lng,
+        "last_seen": t.last_seen,
+        "safety_score": t.safety_score,
+        "tracking_enabled": t.tracking_enabled,
+        "status": t.status,
         "is_valid": t.is_valid,
     }
 
 
-@router.post("", response_model=TouristOut, status_code=201)
+@router.post("", response_model=TouristOut, status_code=201,
+             dependencies=[Depends(registration_rate_limit)])
 def register_tourist(payload: TouristCreate, db: Session = Depends(get_db)):
     """Register a tourist, mint a digital ID, and seed its hash chain."""
     digital_id = _generate_digital_id(payload.full_name)
@@ -144,6 +162,32 @@ def get_chain(tourist_id: int, db: Session = Depends(get_db),
 def verify_chain(tourist_id: int, db: Session = Depends(get_db),
                  _: User = Depends(require_self_or_admin)):
     return hashchain.verify_chain(db, tourist_id)
+
+
+@router.post("/{tourist_id}/chain/tamper-demo")
+def tamper_demo(tourist_id: int, block_index: int = 1, db: Session = Depends(get_db),
+                _: User = Depends(require_admin)):
+    """DEMO ONLY -- edit a stored block in place to prove tamper detection works.
+
+    Disabled in production. Mutates a block's `data` without recomputing its hash,
+    exactly as an attacker with database access would; `chain/verify` must then
+    report the chain as broken at that index.
+    """
+    if settings.is_production:
+        raise HTTPException(status_code=404, detail="Not found")
+    block = (
+        db.query(IdBlock)
+        .filter(IdBlock.tourist_id == tourist_id, IdBlock.index == block_index)
+        .first()
+    )
+    if not block:
+        raise HTTPException(status_code=404, detail="Block not found")
+    payload = json.loads(block.data or "{}")
+    payload["tampered"] = "this value was injected directly into the database"
+    block.data = json.dumps(payload, sort_keys=True)
+    db.commit()
+    return {"tampered_block": block_index,
+            "verify": hashchain.verify_chain(db, tourist_id)}
 
 
 @router.post("/{tourist_id}/location")

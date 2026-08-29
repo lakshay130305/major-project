@@ -5,7 +5,6 @@ import json
 import os
 
 import joblib
-import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.model_selection import train_test_split
@@ -36,7 +35,15 @@ def train(models_dir: str = "ml_models") -> dict:
 
     joblib.dump(model, os.path.join(models_dir, "safety_rf.joblib"))
 
-    importances = dict(zip(FEATURES, [round(float(i), 4) for i in model.feature_importances_]))
+    # A thinned predicted-vs-actual sample lets the dashboard show fit quality
+    # instead of asking the reader to trust a single R2 number.
+    sample = [
+        {"actual": round(float(a), 2), "predicted": round(float(b), 2)}
+        for a, b in zip(y_test[::10], pred[::10], strict=True)
+    ]
+
+    importances = dict(zip(FEATURES, [round(float(i), 4) for i in model.feature_importances_],
+                          strict=True))
     metrics = {
         "model": "RandomForestRegressor",
         "task": "tourist safety score (0-100 regression)",
@@ -46,6 +53,7 @@ def train(models_dir: str = "ml_models") -> dict:
         "r2": round(float(r2), 4),
         "mae": round(float(mae), 4),
         "feature_importances": importances,
+        "predicted_vs_actual": sample,
     }
     print("=== RandomForest safety-score model ===")
     print(json.dumps(metrics, indent=2))

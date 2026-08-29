@@ -1,9 +1,10 @@
 """Incident lifecycle records and their event timeline."""
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.time import utc_now
 from app.db.session import Base
 
 
@@ -25,7 +26,7 @@ class Incident(Base):
     )
 
     detected_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime, default=utc_now
     )
     acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     dispatched_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -50,7 +51,7 @@ class IncidentEvent(Base):
     status: Mapped[str] = mapped_column(String, nullable=False)
     note: Mapped[str] = mapped_column(Text, default="")
     timestamp: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime, default=utc_now
     )
 
     incident: Mapped["Incident"] = relationship(back_populates="events")

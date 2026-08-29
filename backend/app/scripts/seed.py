@@ -7,10 +7,11 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from app.core.security import hash_password
-from app.db.session import Base, SessionLocal, engine
+from app.core.time import utc_now
+from app.db.session import Base, SessionLocal
 from app.models.incident import Incident, IncidentEvent
 from app.models.police import PoliceUnit
 from app.models.tourist import Tourist
@@ -30,10 +31,22 @@ def _rect(lat, lng, dlat=0.008, dlng=0.008):
     ]
 
 
+def _reset_data(db) -> None:
+    """Delete all rows, keeping the schema intact.
+
+    This used to drop and recreate every table, which bypassed Alembic: the
+    tables came back as whatever the models happened to say, while
+    `alembic_version` still claimed the old revision. Deleting rows leaves schema
+    ownership with the migrations.
+    """
+    for table in reversed(Base.metadata.sorted_tables):
+        db.execute(table.delete())
+    db.commit()
+
+
 def seed() -> None:
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
     db = SessionLocal()
+    _reset_data(db)
     try:
         # ---- admin / police operator account ----
         db.add(User(
@@ -88,7 +101,7 @@ def seed() -> None:
         db.flush()
 
         # ---- demo tourists ----
-        now = datetime.utcnow()
+        now = utc_now()
         demo = [
             {
                 "full_name": "Aarav Sharma", "doc": "XXXX-XXXX-4521", "phone": "+91-98765-43210",

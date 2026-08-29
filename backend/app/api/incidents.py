@@ -1,9 +1,8 @@
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_admin, require_self_or_admin
+from app.core.time import utc_now
 from app.db.session import get_db
 from app.models.alert import Alert
 from app.models.audit import AuditLog
@@ -85,7 +84,7 @@ def update_incident(incident_id: int, payload: IncidentStatusUpdate,
     inc = db.get(Incident, incident_id)
     if not inc:
         raise HTTPException(status_code=404, detail="Incident not found")
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utc_now()
     inc.status = payload.status
     if payload.status == "acknowledged":
         inc.acknowledged_at = now

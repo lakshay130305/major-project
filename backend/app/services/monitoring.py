@@ -1,11 +1,12 @@
 """Core pipeline: ingest a location ping -> anomaly + geofence checks ->
 alerts, incidents, safety-score refresh, and WebSocket broadcast."""
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.time import utc_now
 from app.models.alert import Alert
 from app.models.incident import Incident, IncidentEvent
 from app.models.tourist import LocationPing, Tourist
@@ -22,10 +23,11 @@ from app.websocket.manager import broadcast_sync
 _RISK_SEVERITY = {"low": "low", "medium": "medium", "high": "high", "restricted": "critical"}
 
 
-def _create_alert(db: Session, tourist_id, atype, severity, message, lat, lng) -> Alert:
+def _create_alert(db: Session, tourist_id, atype, severity, message, lat, lng,
+                  zone_id: int | None = None) -> Alert:
     alert = Alert(
         tourist_id=tourist_id, type=atype, severity=severity,
-        message=message, lat=lat, lng=lng,
+        message=message, lat=lat, lng=lng, zone_id=zone_id,
     )
     db.add(alert)
     db.flush()
@@ -33,6 +35,7 @@ def _create_alert(db: Session, tourist_id, atype, severity, message, lat, lng) -
         "event": "alert",
         "id": alert.id,
         "tourist_id": tourist_id,
+        "zone_id": zone_id,
         "type": atype,
         "severity": severity,
         "message": message,
@@ -66,7 +69,7 @@ def _open_incident(db: Session, tourist: Tourist, itype, severity, description, 
 def process_ping(db: Session, tourist: Tourist, lat: float, lng: float,
                  speed_kmh: float = 0.0) -> dict:
     """Process one GPS ping. Returns a summary dict for the caller/API."""
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utc_now()
 
     # distance/time from previous ping
     prev = (
@@ -106,8 +109,8 @@ def process_ping(db: Session, tourist: Tourist, lat: float, lng: float,
             reason = f"prolonged inactivity {dt/60:.0f} min"
         elif dist_prev > 5000:
             reason = f"sudden location jump {dist_prev/1000:.1f} km"
-        a = _create_alert(db, tourist.id, "anomaly", "high",
-                          f"Anomaly detected: {reason}", lat, lng)
+        _create_alert(db, tourist.id, "anomaly", "high",
+                      f"Anomaly detected: {reason}", lat, lng)
         alerts_raised.append("anomaly")
         # De-dupe: only open a new incident if there isn't already an unresolved
         # anomaly incident for this tourist in the last 5 minutes (avoids flooding
@@ -141,7 +144,8 @@ def process_ping(db: Session, tourist: Tourist, lat: float, lng: float,
     for z in risky:
         sev = _RISK_SEVERITY.get(z.risk_level, "medium")
         _create_alert(db, tourist.id, "geofence", sev,
-                      f"Entered {z.risk_level} risk zone: {z.name}", lat, lng)
+                      f"Entered {z.risk_level} risk zone: {z.name}", lat, lng,
+                      zone_id=z.id)
         alerts_raised.append("geofence")
 
     # ---- safety score refresh ----
@@ -175,7 +179,7 @@ def trigger_sos(db: Session, tourist: Tourist, lat: float, lng: float, message: 
 
     tourist.status = "sos"
     tourist.last_lat, tourist.last_lng = lat, lng
-    tourist.last_seen = datetime.now(timezone.utc).replace(tzinfo=None)
+    tourist.last_seen = utc_now()
 
     units = db.query(PoliceUnit).filter(PoliceUnit.available == True).all()  # noqa: E712
     nearest = min(units, key=lambda u: haversine_m(lat, lng, u.lat, u.lng), default=None)
@@ -185,7 +189,7 @@ def trigger_sos(db: Session, tourist: Tourist, lat: float, lng: float, message: 
     if nearest:
         inc.assigned_unit_id = nearest.id
         inc.status = "dispatched"
-        inc.dispatched_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        inc.dispatched_at = utc_now()
         db.add(IncidentEvent(incident_id=inc.id, status="dispatched",
                              note=f"Auto-dispatched to {nearest.name} ({nearest.station})"))
 

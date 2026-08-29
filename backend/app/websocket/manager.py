@@ -1,5 +1,6 @@
 """In-process WebSocket connection manager for real-time alert broadcast."""
 import asyncio
+import contextlib
 import json
 from typing import Any
 
@@ -50,7 +51,5 @@ def broadcast_sync(message: dict[str, Any]) -> None:
     loop = manager._loop
     if loop is None or not manager.active:
         return
-    try:
+    with contextlib.suppress(RuntimeError):
         asyncio.run_coroutine_threadsafe(manager.broadcast(message), loop)
-    except RuntimeError:
-        pass

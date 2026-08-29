@@ -5,12 +5,13 @@ import json
 import os
 
 import joblib
-import numpy as np
 from sklearn.ensemble import IsolationForest
 from sklearn.metrics import (
     classification_report,
+    confusion_matrix,
     precision_recall_fscore_support,
     roc_auc_score,
+    roc_curve,
 )
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
@@ -53,6 +54,12 @@ def train(models_dir: str = "ml_models") -> dict:
     joblib.dump(model, os.path.join(models_dir, "anomaly_isoforest.joblib"))
     joblib.dump(scaler, os.path.join(models_dir, "anomaly_scaler.joblib"))
 
+    # Persist the actual evaluation curve and matrix so the dashboard renders
+    # measured results rather than numbers retyped from a console log.
+    fpr, tpr, _ = roc_curve(y_test, scores)
+    step = max(1, len(fpr) // 100)  # thin to ~100 points for the chart
+    tn, fp, fn, tp = confusion_matrix(y_test, y_pred).ravel()
+
     metrics = {
         "model": "IsolationForest",
         "task": "anomaly detection (unsupervised)",
@@ -64,6 +71,14 @@ def train(models_dir: str = "ml_models") -> dict:
         "recall": round(float(recall), 4),
         "f1": round(float(f1), 4),
         "roc_auc": round(float(auc), 4),
+        "confusion_matrix": {
+            "true_negative": int(tn), "false_positive": int(fp),
+            "false_negative": int(fn), "true_positive": int(tp),
+        },
+        "roc_curve": [
+            {"fpr": round(float(a), 4), "tpr": round(float(b), 4)}
+            for a, b in zip(fpr[::step], tpr[::step], strict=True)
+        ],
     }
     print("=== IsolationForest anomaly detector ===")
     print(classification_report(y_test, y_pred, target_names=["normal", "anomaly"],

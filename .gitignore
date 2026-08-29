@@ -17,3 +17,15 @@ npm-debug.log*
 .vscode/
 .idea/
 .DS_Store
+
+# Dev-only cached secret key (never commit)
+.dev_secret
+backend/.dev_secret
+
+# Test/coverage artifacts
+backend/.coverage
+backend/coverage.xml
+frontend/coverage/
+
+# Backup files created during this session's schema migrations
+*.db.bak

@@ -1,9 +1,9 @@
 """Auto-generate an E-FIR (First Information Report) draft for missing tourists."""
 import json
-from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from app.core.time import utc_now
 from app.models.alert import Alert
 from app.models.tourist import Tourist
 
@@ -31,7 +31,7 @@ def generate_efir(db: Session, tourist: Tourist) -> dict:
         for a in anomaly_alerts
     ]
 
-    now = datetime.utcnow()
+    now = utc_now()
     fir_no = f"EFIR/{now.year}/{tourist.id:05d}"
 
     narrative = (

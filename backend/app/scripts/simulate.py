@@ -16,6 +16,7 @@ Scripted events (by step):
 from __future__ import annotations
 
 import argparse
+import contextlib
 import random
 import sys
 import time
@@ -23,10 +24,8 @@ import time
 import httpx
 
 # Windows consoles default to cp1252 and choke on emoji/symbols in output.
-try:
+with contextlib.suppress(Exception):
     sys.stdout.reconfigure(encoding="utf-8")
-except Exception:  # noqa: BLE001
-    pass
 
 BASE = "http://127.0.0.1:8000/api"
 random.seed(7)
@@ -82,7 +81,9 @@ def main() -> None:
 
             # ---- scripted anomalies ----
             if step == 8 and t is tourists[2 % len(tourists)]:
-                lat += 0.03; lng += 0.03; speed = 165  # jump + high speed
+                lat += 0.03
+                lng += 0.03
+                speed = 165  # jump + high speed
                 print(f"[step {step}] ANOMALY: {t['full_name']} high-speed jump (abduction pattern)")
             elif step == 14 and t is tourists[1 % len(tourists)]:
                 lat, lng = 26.1650, 91.7500  # Old Market high-risk zone

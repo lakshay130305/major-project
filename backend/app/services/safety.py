@@ -1,13 +1,12 @@
 """Compute a tourist's dynamic 0-100 safety score with an explainable breakdown."""
-import json
-from datetime import datetime
 
 from sqlalchemy.orm import Session
 
+from app.core.time import local_hour_for
 from app.models.tourist import Tourist
 from app.models.zone import Zone
 from app.services import ml_service
-from app.services.geo import min_distance_to_route, zones_containing_point
+from app.services.geo import zones_containing_point
 
 _RISK_WEIGHT = {"low": 20.0, "medium": 50.0, "high": 80.0, "restricted": 100.0}
 
@@ -44,7 +43,7 @@ def compute_safety_score(
     else:
         zone_risk, crime_index, zone_name = 15.0, 20.0, "open area"
 
-    hour = datetime.now().hour
+    hour = local_hour_for(lat, lng)
     weather_risk = _mock_weather_risk(lat, lng)
 
     feats = ml_service.safety_features(zone_risk, hour, anomaly_score, crime_index, weather_risk)

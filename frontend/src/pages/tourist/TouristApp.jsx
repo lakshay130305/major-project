@@ -5,7 +5,7 @@ import api from '../../api'
 import { useAuth } from '../../auth.jsx'
 import { ScoreGauge, Card } from '../../components/ui.jsx'
 import { touristIcon, policeIcon, riskColor } from '../../components/mapIcons'
-import { haversineKm } from '../../components/geo'
+import { haversineKm, pointInPoly } from '../../components/geo'
 import { TRACK_INTERVAL_MS } from '../../config'
 
 export default function TouristApp() {
@@ -195,17 +195,4 @@ export default function TouristApp() {
       </div>
     </div>
   )
-}
-
-// Point-in-polygon (ray casting) for [[lat,lng],...] rings.
-function pointInPoly(lat, lng, poly) {
-  if (!poly || poly.length < 3) return false
-  let inside = false
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [yi, xi] = poly[i], [yj, xj] = poly[j]
-    const intersect = (xi > lng) !== (xj > lng) &&
-      lat < ((yj - yi) * (lng - xi)) / (xj - xi) + yi
-    if (intersect) inside = !inside
-  }
-  return inside
 }

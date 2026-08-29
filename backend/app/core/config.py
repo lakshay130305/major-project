@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import secrets
 import warnings
+from pathlib import Path
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,6 +28,8 @@ class Settings(BaseSettings):
     # ---- auth / JWT ----
     # Leave empty to auto-generate an ephemeral key in dev (tokens reset on restart).
     SECRET_KEY: str = ""
+    # Where a generated dev key is cached so it survives restarts (dev only).
+    DEV_SECRET_FILE: str = ".dev_secret"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 12  # 12h
 
@@ -39,6 +42,8 @@ class Settings(BaseSettings):
     LOGIN_RATE_WINDOW_SECONDS: int = 300
     GLOBAL_RATE_LIMIT: int = 240        # requests
     GLOBAL_RATE_WINDOW_SECONDS: int = 60
+    REGISTRATION_RATE_LIMIT: int = 5    # public digital-ID registrations
+    REGISTRATION_RATE_WINDOW_SECONDS: int = 3600
 
     # ---- request hardening ----
     MAX_REQUEST_BODY_BYTES: int = 1_000_000  # 1 MB
@@ -79,19 +84,30 @@ class Settings(BaseSettings):
         return v.lower()
 
     @model_validator(mode="after")
-    def _finalize_secret(self) -> "Settings":
+    def _finalize_secret(self) -> Settings:
         if not self.SECRET_KEY:
             if self.is_production:
                 raise RuntimeError(
                     "SECRET_KEY must be set in production. Generate one with: "
                     "python -c \"import secrets; print(secrets.token_urlsafe(48))\""
                 )
-            # dev convenience: ephemeral key
-            self.SECRET_KEY = secrets.token_urlsafe(48)
-            warnings.warn(
-                "No SECRET_KEY set — using an ephemeral dev key (tokens reset on restart).",
-                stacklevel=2,
-            )
+            # Dev convenience: generate a key once and persist it to a
+            # gitignored file. It must be STABLE across restarts because the
+            # digital-ID hash chain is keyed with it (see services/hashchain.py)
+            # -- a fresh key each boot would invalidate every existing chain.
+            key_file = Path(self.DEV_SECRET_FILE)
+            if key_file.exists():
+                self.SECRET_KEY = key_file.read_text(encoding="utf-8").strip()
+            else:
+                self.SECRET_KEY = secrets.token_urlsafe(48)
+                try:
+                    key_file.write_text(self.SECRET_KEY, encoding="utf-8")
+                except OSError:
+                    warnings.warn(
+                        "Could not persist the dev SECRET_KEY; hash chains and "
+                        "tokens will reset on restart.",
+                        stacklevel=2,
+                    )
         elif len(self.SECRET_KEY) < 32 and self.is_production:
             raise RuntimeError("SECRET_KEY is too short for production (need >= 32 chars).")
 
