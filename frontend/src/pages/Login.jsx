@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { useAuth } from '../auth.jsx'
 import { SHOW_DEMO_LOGINS } from '../config'
+import LanguageSwitcher from '../components/LanguageSwitcher.jsx'
 
 const DEMO = [
   { label: 'Police / Admin', email: 'admin@tourism.gov.in', password: 'admin123' },
@@ -10,6 +12,7 @@ const DEMO = [
 
 export default function Login() {
   const { login } = useAuth()
+  const { t } = useTranslation()
   const nav = useNavigate()
   const [email, setEmail] = useState(SHOW_DEMO_LOGINS ? 'admin@tourism.gov.in' : '')
   const [password, setPassword] = useState(SHOW_DEMO_LOGINS ? 'admin123' : '')
@@ -24,7 +27,7 @@ export default function Login() {
       const u = await login(email, password)
       nav(u.role === 'admin' ? '/admin' : '/app')
     } catch (err) {
-      setError('Invalid credentials. Try a demo account below.')
+      setError(t('auth.invalid_credentials'))
     } finally {
       setLoading(false)
     }
@@ -33,6 +36,9 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-600 to-indigo-700 p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-8">
+        <div className="flex justify-end mb-2">
+          <LanguageSwitcher className="!border-slate-200 !text-slate-600" />
+        </div>
         <div className="text-center mb-6">
           <div className="text-4xl mb-2">🛡️</div>
           <h1 className="text-xl font-bold text-slate-800">Smart Tourist Safety</h1>
@@ -41,13 +47,13 @@ export default function Login() {
 
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <label className="text-sm font-medium text-slate-600">Email</label>
+            <label className="text-sm font-medium text-slate-600">{t('auth.email')}</label>
             <input value={email} onChange={(e) => setEmail(e.target.value)}
               className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-sky-500 outline-none"
               type="email" required />
           </div>
           <div>
-            <label className="text-sm font-medium text-slate-600">Password</label>
+            <label className="text-sm font-medium text-slate-600">{t('auth.password')}</label>
             <input value={password} onChange={(e) => setPassword(e.target.value)}
               className="mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-sky-500 outline-none"
               type="password" required />
@@ -55,7 +61,7 @@ export default function Login() {
           {error && <div className="text-sm text-red-600">{error}</div>}
           <button disabled={loading}
             className="w-full bg-sky-600 hover:bg-sky-700 text-white font-semibold py-2 rounded-lg transition disabled:opacity-60">
-            {loading ? 'Signing in…' : 'Sign In'}
+            {loading ? 'Signing in…' : t('auth.sign_in')}
           </button>
         </form>
 
@@ -75,7 +81,7 @@ export default function Login() {
         )}
 
         <p className="text-center text-sm text-slate-500 mt-6">
-          New tourist? <Link to="/register" className="text-sky-600 font-medium">Register &amp; get a Digital ID</Link>
+          <Link to="/register" className="text-sky-600 font-medium">{t('auth.register_prompt')}</Link>
         </p>
       </div>
     </div>

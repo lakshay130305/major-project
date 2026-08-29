@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { MapContainer, TileLayer, Marker, Polygon, Circle } from 'react-leaflet'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import api from '../../api'
 import { useAuth } from '../../auth.jsx'
 import { ScoreGauge, Card } from '../../components/ui.jsx'
 import { touristIcon, policeIcon, riskColor } from '../../components/mapIcons'
 import { haversineKm, pointInPoly } from '../../components/geo'
 import { TRACK_INTERVAL_MS } from '../../config'
+import useSpeechRecognition from '../../hooks/useSpeechRecognition'
+import LanguageSwitcher from '../../components/LanguageSwitcher.jsx'
 
 export default function TouristApp() {
   const { user, logout } = useAuth()
   const nav = useNavigate()
+  const { t, i18n } = useTranslation()
   const tid = user.tourist_id
   const [me, setMe] = useState(null)
   const [score, setScore] = useState(null)
@@ -19,7 +23,9 @@ export default function TouristApp() {
   const [tracking, setTracking] = useState(true)
   const [toast, setToast] = useState(null)
   const [sosSent, setSosSent] = useState(null)
+  const [emergencyMessage, setEmergencyMessage] = useState('')
   const posRef = useRef(null)
+  const speech = useSpeechRecognition({ lang: i18n.resolvedLanguage || i18n.language })
 
   const load = async () => {
     const [m, s, z, u] = await Promise.all([
@@ -61,12 +67,21 @@ export default function TouristApp() {
 
   const sendSOS = async () => {
     const [lat, lng] = posRef.current
-    const { data } = await api.post(`/tourists/${tid}/sos`, { lat, lng, message: 'Emergency! Need help.' })
+    const message = emergencyMessage.trim() || 'Emergency! Need help.'
+    const { data } = await api.post(`/tourists/${tid}/sos`, { lat, lng, message })
     setSosSent(data)
+    setEmergencyMessage('')
+    speech.reset()
     load()
   }
 
-  if (!me || !score) return <div className="p-6 text-center text-slate-500">Loading…</div>
+  // Voice input fills the description box as soon as a transcript arrives —
+  // the tourist can review or edit it before the SOS button is pressed.
+  useEffect(() => {
+    if (speech.transcript) setEmergencyMessage(speech.transcript)
+  }, [speech.transcript])
+
+  if (!me || !score) return <div className="p-6 text-center text-slate-500">{t('app.loading')}</div>
 
   const inZones = zones.filter((z) => pointInPoly(me.last_lat, me.last_lng, z.polygon))
   const riskyZone = inZones.find((z) => ['high', 'restricted'].includes(z.risk_level))
@@ -74,16 +89,19 @@ export default function TouristApp() {
     .map((u) => ({ ...u, dist: haversineKm(me.last_lat, me.last_lng, u.lat, u.lng) }))
     .sort((a, b) => a.dist - b.dist).slice(0, 3)
 
-  const nextStop = me.itinerary?.[0]
-
   return (
     <div className="min-h-screen bg-slate-100 pb-24">
       <header className="bg-sky-600 text-white px-4 py-3 flex items-center justify-between sticky top-0 z-[1000]">
         <div>
-          <div className="text-xs opacity-80">Digital Tourist ID</div>
+          <div className="text-xs opacity-80">{t('app.digital_id')}</div>
           <div className="font-bold">{me.digital_id}</div>
         </div>
-        <button onClick={() => { logout(); nav('/login') }} className="text-sm bg-sky-700 px-3 py-1 rounded-lg">Logout</button>
+        <div className="flex items-center gap-2">
+          <LanguageSwitcher />
+          <button onClick={() => { logout(); nav('/login') }} className="text-sm bg-sky-700 px-3 py-1 rounded-lg">
+            {t('app.logout')}
+          </button>
+        </div>
       </header>
 
       {toast && (
@@ -97,11 +115,11 @@ export default function TouristApp() {
         <div className="bg-white rounded-xl shadow-sm p-4 flex items-center gap-4">
           <ScoreGauge score={score.score} />
           <div>
-            <div className="text-sm text-slate-500">My Safety Score</div>
+            <div className="text-sm text-slate-500">{t('safety.my_score')}</div>
             <div className="text-lg font-bold">{me.full_name}</div>
             <div className="text-xs text-slate-500 mt-1">
-              Zone: {score.breakdown.zone}<br />
-              {score.breakdown.night_penalty ? '🌙 Night-time caution' : '☀️ Daytime'}
+              {t('safety.zone')}: {score.breakdown.zone}<br />
+              {score.breakdown.night_penalty ? `🌙 ${t('safety.night_caution')}` : `☀️ ${t('safety.daytime')}`}
             </div>
           </div>
         </div>
@@ -109,14 +127,14 @@ export default function TouristApp() {
         {/* geofence warning */}
         {riskyZone ? (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-            <div className="font-semibold text-red-700">⚠ Geo-fence Warning</div>
+            <div className="font-semibold text-red-700">⚠ {t('geofence.warning_title')}</div>
             <div className="text-sm text-red-600 mt-1">
-              You are in <b>{riskyZone.name}</b> ({riskyZone.risk_level} risk). Stay alert and consider leaving the area.
+              {t('geofence.warning_body', { zone: riskyZone.name, risk: riskyZone.risk_level })}
             </div>
           </div>
         ) : (
           <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700">
-            ✅ You are in a safe area.
+            ✅ {t('geofence.safe')}
           </div>
         )}
 
@@ -136,8 +154,8 @@ export default function TouristApp() {
         {/* live tracking toggle */}
         <div className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between">
           <div>
-            <div className="font-medium">Live Location Tracking</div>
-            <div className="text-xs text-slate-500">Opt-in — lets the control room protect you</div>
+            <div className="font-medium">{t('tracking.title')}</div>
+            <div className="text-xs text-slate-500">{t('tracking.subtitle')}</div>
           </div>
           <button onClick={toggleTracking}
             className={`w-14 h-8 rounded-full transition relative ${tracking ? 'bg-green-500' : 'bg-slate-300'}`}>
@@ -146,20 +164,20 @@ export default function TouristApp() {
         </div>
 
         {/* itinerary tracker */}
-        <Card title="Itinerary Tracker">
+        <Card title={t('itinerary.title')}>
           <ol className="space-y-2">
             {me.itinerary?.map((w, i) => (
               <li key={i} className="flex items-center gap-2 text-sm">
                 <span className={`w-2.5 h-2.5 rounded-full ${i === 0 ? 'bg-sky-500' : 'bg-slate-300'}`}></span>
                 <span className={i === 0 ? 'font-medium' : 'text-slate-500'}>{w.name}</span>
-                {i === 0 && <span className="text-xs text-sky-600 ml-auto">next stop</span>}
+                {i === 0 && <span className="text-xs text-sky-600 ml-auto">{t('itinerary.next_stop')}</span>}
               </li>
             ))}
           </ol>
         </Card>
 
         {/* nearby police */}
-        <Card title="Nearby Police Stations">
+        <Card title={t('police.title')}>
           <ul className="space-y-2">
             {nearby.map((u) => (
               <li key={u.id} className="flex items-center justify-between text-sm">
@@ -173,13 +191,48 @@ export default function TouristApp() {
           </ul>
         </Card>
 
+        {/* voice/text emergency description — optional context sent with SOS */}
+        <Card title={t('sos.describe_title')}>
+          <textarea
+            value={emergencyMessage}
+            onChange={(e) => setEmergencyMessage(e.target.value)}
+            placeholder={t('sos.describe_placeholder')}
+            rows={3}
+            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm resize-none"
+          />
+          <div className="flex items-center justify-between mt-2">
+            {speech.supported ? (
+              <button
+                onClick={speech.listening ? speech.stop : speech.start}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 ${
+                  speech.listening ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'}`}>
+                {speech.listening ? t('sos.listening') : t('sos.speak')}
+              </button>
+            ) : (
+              <span className="text-xs text-slate-400">{t('sos.voice_unsupported')}</span>
+            )}
+            {speech.error && <span className="text-xs text-red-500">{speech.error}</span>}
+          </div>
+          <div className="text-xs text-slate-400 mt-2">{t('sos.describe_note')}</div>
+        </Card>
+
         {sosSent && (
           <div className="bg-red-600 text-white rounded-xl p-4 text-sm">
-            <div className="font-bold">🚨 SOS Sent</div>
+            <div className="font-bold">🚨 {t('sos.sent_title')}</div>
             {sosSent.nearest_unit && (
-              <div className="mt-1">Dispatched <b>{sosSent.nearest_unit.name}</b> ({sosSent.nearest_unit.station}) — {sosSent.nearest_unit.distance_km} km away.</div>
+              <div className="mt-1">
+                {t('sos.dispatched', {
+                  name: sosSent.nearest_unit.name,
+                  station: sosSent.nearest_unit.station,
+                  km: sosSent.nearest_unit.distance_km,
+                })}
+              </div>
             )}
-            <div className="mt-1 text-red-100 text-xs">Emergency contacts notified: {sosSent.notified_contacts?.map((c) => c.name).join(', ')}</div>
+            <div className="mt-1 text-red-100 text-xs">
+              {t('sos.contacts_notified', {
+                list: sosSent.notified_contacts?.map((c) => c.name).join(', '),
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -189,7 +242,7 @@ export default function TouristApp() {
         <div className="max-w-md mx-auto">
           <button onClick={sendSOS}
             className="w-full bg-red-600 hover:bg-red-700 text-white font-bold text-lg py-4 rounded-2xl shadow-lg sos-pulse">
-            🆘 SOS — Send Emergency Alert
+            🆘 {t('sos.button')}
           </button>
         </div>
       </div>
