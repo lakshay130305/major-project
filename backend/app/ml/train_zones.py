@@ -12,6 +12,7 @@ import numpy as np
 from sklearn.cluster import DBSCAN
 from sklearn.metrics import silhouette_score
 
+from app.ml import registry
 from app.ml.generate_data import generate_incident_points
 
 
@@ -75,6 +76,12 @@ def train(models_dir: str = "ml_models") -> dict:
         "silhouette": sil,
         "hotzones_file": out_path,
     }
+    version_record = registry.record_version(
+        models_dir, "zones", registry.dataset_hash(df), metrics,
+        active_files=["hotzones.json"],
+    )
+    metrics["version"] = version_record["version"]
+
     print("=== DBSCAN hot-zone clustering ===")
     print(json.dumps(metrics, indent=2))
     return metrics

@@ -9,6 +9,7 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.model_selection import train_test_split
 
+from app.ml import registry
 from app.ml.generate_data import generate_safety_data
 
 FEATURES = ["zone_risk", "hour", "anomaly_score", "crime_index", "weather_risk"]
@@ -55,6 +56,12 @@ def train(models_dir: str = "ml_models") -> dict:
         "feature_importances": importances,
         "predicted_vs_actual": sample,
     }
+    version_record = registry.record_version(
+        models_dir, "safety", registry.dataset_hash(df), metrics,
+        active_files=["safety_rf.joblib"],
+    )
+    metrics["version"] = version_record["version"]
+
     print("=== RandomForest safety-score model ===")
     print(json.dumps(metrics, indent=2))
     return metrics

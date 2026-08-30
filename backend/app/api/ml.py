@@ -15,8 +15,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_admin
 from app.core.config import settings
 from app.db.session import get_db
+from app.ml import registry
 from app.models.tourist import LocationPing
 from app.models.user import User
+from app.services import drift
 
 router = APIRouter(prefix="/ml", tags=["ml"])
 
@@ -118,3 +120,24 @@ def feature_contract(_: User = Depends(require_admin)):
                              "risky": "25-49", "danger": "<25"},
         },
     }
+
+
+@router.get("/registry")
+def model_registry(_: User = Depends(require_admin)):
+    """Version history for every trained model: when each version was
+    trained, the hash of the data it saw, and its metrics -- so a model can
+    be traced and rolled back rather than trusted blindly."""
+    reg = registry.load_registry(settings.ML_MODELS_DIR)
+    if not reg:
+        raise HTTPException(
+            status_code=404,
+            detail="No model registry found. Run: python -m app.ml.train_all",
+        )
+    return reg
+
+
+@router.get("/drift")
+def model_drift(db: Session = Depends(get_db), _: User = Depends(require_admin)):
+    """Population Stability Index comparing live ping traffic against the
+    distribution the anomaly model was trained on."""
+    return drift.get_drift_report(db)

@@ -86,7 +86,8 @@
         "fpr": 1.0,
         "tpr": 1.0
       }
-    ]
+    ],
+    "version": 1
   },
   "safety": {
     "model": "RandomForestRegressor",
@@ -710,7 +711,8 @@
         "actual": 53.22,
         "predicted": 51.73
       }
-    ]
+    ],
+    "version": 1
   },
   "zones": {
     "model": "DBSCAN",
@@ -721,6 +723,7 @@
     "n_clusters": 4,
     "n_noise": 64,
     "silhouette": 0.8782,
-    "hotzones_file": "ml_models\\hotzones.json"
+    "hotzones_file": "ml_models\\hotzones.json",
+    "version": 1
   }
 }

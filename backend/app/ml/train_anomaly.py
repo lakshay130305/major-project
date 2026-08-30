@@ -16,6 +16,7 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
+from app.ml import registry
 from app.ml.generate_data import generate_movement_data
 
 FEATURES = ["speed_kmh", "dist_from_prev_m", "inactivity_min", "dist_from_route_m"]
@@ -54,6 +55,17 @@ def train(models_dir: str = "ml_models") -> dict:
     joblib.dump(model, os.path.join(models_dir, "anomaly_isoforest.joblib"))
     joblib.dump(scaler, os.path.join(models_dir, "anomaly_scaler.joblib"))
 
+    # Reference distribution for live drift monitoring (app/services/drift.py).
+    # speed_kmh is the one feature both this training set and the live
+    # LocationPing table actually record, so it's the one drift can honestly
+    # compare -- the other three engineered features aren't persisted per ping.
+    # Built from the NORMAL-labelled rows only: `df` also contains the
+    # synthetic injected anomalies (including the ~150-260 km/h abduction
+    # scenario), and drift is "does live traffic still look like ordinary
+    # behaviour", not "does it look like our anomaly-injected training mix".
+    normal_speeds = df.loc[df["label"] == 0, "speed_kmh"].values
+    registry.save_reference_distribution(models_dir, "speed_kmh", normal_speeds)
+
     # Persist the actual evaluation curve and matrix so the dashboard renders
     # measured results rather than numbers retyped from a console log.
     fpr, tpr, _ = roc_curve(y_test, scores)
@@ -80,6 +92,12 @@ def train(models_dir: str = "ml_models") -> dict:
             for a, b in zip(fpr[::step], tpr[::step], strict=True)
         ],
     }
+    version_record = registry.record_version(
+        models_dir, "anomaly", registry.dataset_hash(df), metrics,
+        active_files=["anomaly_isoforest.joblib", "anomaly_scaler.joblib"],
+    )
+    metrics["version"] = version_record["version"]
+
     print("=== IsolationForest anomaly detector ===")
     print(classification_report(y_test, y_pred, target_names=["normal", "anomaly"],
                                 zero_division=0))

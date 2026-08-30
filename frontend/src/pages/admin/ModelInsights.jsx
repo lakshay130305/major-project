@@ -25,11 +25,19 @@ export default function ModelInsights() {
   const [report, setReport] = useState(null)
   const [status, setStatus] = useState(null)
   const [error, setError] = useState(null)
+  const [registry, setRegistry] = useState(null)
+  const [drift, setDrift] = useState(null)
 
   useEffect(() => {
     Promise.all([api.get('/ml/metrics'), api.get('/ml/status')])
       .then(([m, s]) => { setReport(m.data); setStatus(s.data) })
       .catch((e) => setError(e.response?.data?.detail || 'Failed to load model metrics.'))
+    // Registry/drift are optional extras -- their absence (e.g. a fresh clone
+    // that hasn't retrained since this feature landed) shouldn't block the
+    // rest of the page, so failures here are swallowed rather than surfaced
+    // as the page-level error.
+    api.get('/ml/registry').then((r) => setRegistry(r.data)).catch(() => setRegistry(null))
+    api.get('/ml/drift').then((r) => setDrift(r.data)).catch(() => setDrift(null))
   }, [])
 
   if (error) {
@@ -187,6 +195,67 @@ export default function ModelInsights() {
           ))}
         </div>
       </Card>
+
+      {/* --- version history --- */}
+      {registry && (
+        <Card title="Model Version History">
+          <div className="space-y-4">
+            {Object.entries(registry).map(([model, info]) => (
+              <div key={model}>
+                <div className="text-sm font-semibold text-slate-700 capitalize mb-1">
+                  {model} <span className="text-xs font-normal text-slate-400">(active: v{info.active_version})</span>
+                </div>
+                <div className="space-y-1">
+                  {[...info.versions].reverse().map((v) => (
+                    <div key={v.version}
+                      className={`flex items-center justify-between text-xs px-2.5 py-1.5 rounded-lg ${
+                        v.version === info.active_version ? 'bg-sky-50 border border-sky-200' : 'bg-slate-50'}`}>
+                      <span className="font-mono">v{v.version}</span>
+                      <span className="text-slate-500">{new Date(v.trained_at).toLocaleString()}</span>
+                      <span className="text-slate-400 font-mono">hash {v.dataset_hash}</span>
+                      {v.version === info.active_version && (
+                        <span className="text-sky-600 font-semibold">active</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* --- drift monitoring --- */}
+      {drift && (
+        <Card title="Live Traffic Drift (Population Stability Index)">
+          {!drift.available ? (
+            <div className="text-sm text-slate-400">{drift.reason}</div>
+          ) : (
+            <div className="space-y-2">
+              {drift.features.map((f) => {
+                const color = f.verdict === 'stable' ? 'text-green-700 bg-green-50'
+                  : f.verdict === 'moderate drift' ? 'text-amber-700 bg-amber-50'
+                  : 'text-red-700 bg-red-50'
+                return (
+                  <div key={f.feature} className="flex items-center justify-between text-sm">
+                    <span className="font-mono">{f.feature}</span>
+                    <span className="text-xs text-slate-500">
+                      {f.n_live} live vs {f.n_reference} training samples
+                    </span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${color}`}>
+                      PSI {f.psi} · {f.verdict}
+                    </span>
+                  </div>
+                )
+              })}
+              <div className="text-xs text-slate-400 pt-1">
+                PSI &lt; 0.1 stable · 0.1-0.25 moderate · &gt;0.25 significant — the
+                conventional thresholds this metric is used with.
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
     </div>
   )
 }

@@ -5,8 +5,12 @@ __pycache__/
 *.db
 backend/.env
 
-# ML artifacts (regenerate with train_all) — keep dir, ignore binaries
+# ML artifacts (regenerate with train_all) — keep dir, ignore binaries.
+# Versioned snapshot copies (model_v1.joblib, hotzones_v2.json, ...) are also
+# ignored: they're per-training-run history the registry tracks in
+# registry.json, not something to accumulate in git across every retrain.
 backend/ml_models/*.joblib
+backend/ml_models/*_v[0-9]*.json
 
 # Node
 frontend/node_modules/
