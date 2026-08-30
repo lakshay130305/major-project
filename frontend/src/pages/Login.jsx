@@ -82,7 +82,10 @@ export default function Login() {
           </div>
         )}
 
-        <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-6">
+        <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-4">
+          <Link to="/forgot-password" className="text-sky-600 dark:text-sky-400 font-medium">Forgot password?</Link>
+        </p>
+        <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-2">
           <Link to="/register" className="text-sky-600 dark:text-sky-400 font-medium">{t('auth.register_prompt')}</Link>
         </p>
       </div>

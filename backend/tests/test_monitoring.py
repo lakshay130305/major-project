@@ -143,3 +143,26 @@ def test_sos_marks_tourist_and_notifies_contacts(db):
     assert t.status == "sos"
     assert result["notified_contacts"][0]["name"] == "Kin"
     assert db.query(Alert).filter_by(type="sos").one().severity == "critical"
+
+
+def test_sos_actually_dispatches_to_the_notification_channel(db, monkeypatch):
+    """The API previously returned `notified_contacts` without sending
+    anything -- this pins that a message is actually dispatched per contact."""
+    from app.services import notifications
+
+    sent = []
+    monkeypatch.setattr(
+        notifications, "get_channel",
+        lambda: type("C", (), {"send": staticmethod(
+            lambda to, subject, body: sent.append({"to": to, "subject": subject, "body": body})
+        )})(),
+    )
+
+    make_unit(db)
+    t = make_tourist(db)
+    trigger_sos(db, t, 26.1445, 91.7362, "Help, being followed")
+
+    assert len(sent) == 1
+    assert sent[0]["to"] == "+91-1"  # the seeded contact's phone number
+    assert "Help, being followed" in sent[0]["body"]
+    assert t.full_name in sent[0]["body"]

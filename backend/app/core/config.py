@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     # ---- ML ----
     ML_MODELS_DIR: str = "ml_models"
 
+    # ---- notifications ----
+    # "console" logs instead of sending (default -- no external service
+    # needed). See app/services/notifications.py for the extension point.
+    NOTIFICATION_CHANNEL: str = "console"
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 30
+
     # ---- weather (safety-score input) ----
     # Empty = use the deterministic mock (no network needed, works offline).
     # Set to a real OpenWeatherMap API key (free tier) to use live conditions.

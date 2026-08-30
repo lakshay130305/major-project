@@ -12,7 +12,7 @@ from app.models.alert import Alert
 from app.models.incident import Incident, IncidentEvent
 from app.models.tourist import LocationPing, Tourist
 from app.models.zone import Zone
-from app.services import ml_service
+from app.services import ml_service, notifications
 from app.services.geo import (
     haversine_m,
     min_distance_to_route,
@@ -244,6 +244,15 @@ def trigger_sos(db: Session, tourist: Tourist, lat: float, lng: float, message: 
                   f"🚨 SOS from {tourist.full_name}", lat, lng)
 
     contacts = json.loads(tourist.emergency_contacts or "[]")
+    for contact in contacts:
+        notifications.get_channel().send(
+            to=contact.get("phone", ""),
+            subject=f"SOS alert from {tourist.full_name}",
+            body=(
+                f"{tourist.full_name} has triggered an SOS. Last known location: "
+                f"{lat:.5f}, {lng:.5f}. Message: {message}"
+            ),
+        )
     db.commit()
 
     return {

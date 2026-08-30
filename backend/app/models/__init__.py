@@ -4,6 +4,7 @@ from app.models.audit import AuditLog
 from app.models.device import Device
 from app.models.efir import EFIR
 from app.models.incident import Incident, IncidentEvent
+from app.models.password_reset import PasswordResetToken
 from app.models.police import PoliceUnit
 from app.models.revoked_token import RevokedToken
 from app.models.tourist import IdBlock, LocationPing, Tourist
@@ -20,6 +21,7 @@ __all__ = [
     "IncidentEvent",
     "Alert",
     "PoliceUnit",
+    "PasswordResetToken",
     "RevokedToken",
     "AuditLog",
     "Device",
