@@ -5,15 +5,10 @@ from sqlalchemy.orm import Session
 from app.core.time import local_hour_for
 from app.models.tourist import Tourist
 from app.models.zone import Zone
-from app.services import ml_service
+from app.services import ml_service, weather
 from app.services.geo import zones_containing_point
 
 _RISK_WEIGHT = {"low": 20.0, "medium": 50.0, "high": 80.0, "restricted": 100.0}
-
-
-def _mock_weather_risk(lat: float, lng: float) -> float:
-    """Deterministic mock weather risk 0-100 (stands in for a weather API)."""
-    return round((abs(lat * 100 + lng * 100) % 60), 1)
 
 
 def band_for(score: float) -> str:
@@ -44,7 +39,7 @@ def compute_safety_score(
         zone_risk, crime_index, zone_name = 15.0, 20.0, "open area"
 
     hour = local_hour_for(lat, lng)
-    weather_risk = _mock_weather_risk(lat, lng)
+    weather_risk = weather.get_weather_risk(lat, lng)
 
     feats = ml_service.safety_features(zone_risk, hour, anomaly_score, crime_index, weather_risk)
     score = ml_service.predict_safety_score(feats)

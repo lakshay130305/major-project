@@ -57,6 +57,13 @@ class Settings(BaseSettings):
     # ---- ML ----
     ML_MODELS_DIR: str = "ml_models"
 
+    # ---- weather (safety-score input) ----
+    # Empty = use the deterministic mock (no network needed, works offline).
+    # Set to a real OpenWeatherMap API key (free tier) to use live conditions.
+    OPENWEATHER_API_KEY: str = ""
+    OPENWEATHER_TIMEOUT_SECONDS: float = 3.0
+    WEATHER_CACHE_TTL_SECONDS: int = 600
+
     # ---- domain thresholds ----
     ROUTE_DEVIATION_THRESHOLD_M: float = 2000.0
     ANOMALY_INCIDENT_DEDUPE_MINUTES: int = 5
