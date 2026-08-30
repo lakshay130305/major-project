@@ -7,7 +7,7 @@ import { useAuth } from '../../auth.jsx'
 import { ScoreGauge, Card } from '../../components/ui.jsx'
 import { touristIcon, policeIcon, riskColor } from '../../components/mapIcons'
 import { haversineKm, pointInPoly } from '../../components/geo'
-import { TRACK_INTERVAL_MS, SIMULATE_GPS } from '../../config'
+import { TRACK_INTERVAL_MS, SIMULATE_GPS, DEFAULT_MAP } from '../../config'
 import useSpeechRecognition from '../../hooks/useSpeechRecognition'
 import useGeolocation from '../../hooks/useGeolocation'
 import useWebSocket from '../../useWebSocket'
@@ -47,7 +47,13 @@ export default function TouristApp() {
     ])
     setMe(m.data); setScore(s.data); setZones(z.data); setUnits(u.data)
     setTracking(m.data.tracking_enabled)
-    posRef.current = [m.data.last_lat, m.data.last_lng]
+    // A just-registered tourist has never sent a ping, so last_lat/last_lng
+    // are null until the first location push -- fall back to the map's
+    // default center so the random-walk simulator (and a real GPS fix) has
+    // somewhere real to start from, instead of drifting near (0, 0).
+    posRef.current = m.data.last_lat != null
+      ? [m.data.last_lat, m.data.last_lng]
+      : DEFAULT_MAP.center
   }
   useEffect(() => { load() }, [])
 
@@ -157,11 +163,20 @@ export default function TouristApp() {
 
   if (!me || !score) return <div className="p-6 text-center text-slate-500 dark:text-slate-400">{t('app.loading')}</div>
 
-  const inZones = zones.filter((z) => pointInPoly(me.last_lat, me.last_lng, z.polygon))
+  // Not yet true until the first location push lands (fresh registration,
+  // tracking just turned on, or a device still acquiring a GPS fix) --
+  // showing a map/geofence/distance built on a null position would either
+  // crash (Leaflet rejects a null LatLng) or silently mislead a safety app
+  // into showing a position that was never actually confirmed.
+  const hasLocation = me.last_lat != null && me.last_lng != null
+
+  const inZones = hasLocation ? zones.filter((z) => pointInPoly(me.last_lat, me.last_lng, z.polygon)) : []
   const riskyZone = inZones.find((z) => ['high', 'restricted'].includes(z.risk_level))
-  const nearby = [...units]
-    .map((u) => ({ ...u, dist: haversineKm(me.last_lat, me.last_lng, u.lat, u.lng) }))
-    .sort((a, b) => a.dist - b.dist).slice(0, 3)
+  const nearby = hasLocation
+    ? [...units]
+        .map((u) => ({ ...u, dist: haversineKm(me.last_lat, me.last_lng, u.lat, u.lng) }))
+        .sort((a, b) => a.dist - b.dist).slice(0, 3)
+    : []
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-900 pb-24">
@@ -206,7 +221,11 @@ export default function TouristApp() {
         </div>
 
         {/* geofence warning */}
-        {riskyZone ? (
+        {!hasLocation ? (
+          <div className="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-3 text-sm text-slate-500 dark:text-slate-400">
+            📍 {t('geofence.awaiting_location')}
+          </div>
+        ) : riskyZone ? (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4">
             <div className="font-semibold text-red-700">⚠ {t('geofence.warning_title')}</div>
             <div className="text-sm text-red-600 mt-1">
@@ -220,17 +239,24 @@ export default function TouristApp() {
         )}
 
         {/* map */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden" style={{ height: 240 }}>
-          <MapContainer center={[me.last_lat, me.last_lng]} zoom={14} style={{ height: '100%' }} key={me.id}>
-            <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OSM" />
-            {zones.map((z) => (
-              <Polygon key={z.id} positions={z.polygon}
-                pathOptions={{ color: riskColor[z.risk_level], fillOpacity: 0.15, weight: 1.5 }} />
-            ))}
-            <Marker position={[me.last_lat, me.last_lng]} icon={touristIcon(score.score)} />
-            {nearby.map((u) => <Marker key={u.id} position={[u.lat, u.lng]} icon={policeIcon} />)}
-          </MapContainer>
-        </div>
+        {hasLocation ? (
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden" style={{ height: 240 }}>
+            <MapContainer center={[me.last_lat, me.last_lng]} zoom={14} style={{ height: '100%' }} key={me.id}>
+              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OSM" />
+              {zones.map((z) => (
+                <Polygon key={z.id} positions={z.polygon}
+                  pathOptions={{ color: riskColor[z.risk_level], fillOpacity: 0.15, weight: 1.5 }} />
+              ))}
+              <Marker position={[me.last_lat, me.last_lng]} icon={touristIcon(score.score)} />
+              {nearby.map((u) => <Marker key={u.id} position={[u.lat, u.lng]} icon={policeIcon} />)}
+            </MapContainer>
+          </div>
+        ) : (
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm flex items-center justify-center text-sm text-slate-400 dark:text-slate-500"
+            style={{ height: 240 }}>
+            {t('geofence.awaiting_location')}
+          </div>
+        )}
 
         {/* live tracking toggle */}
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-4">
@@ -291,7 +317,7 @@ export default function TouristApp() {
             onChange={(e) => setEmergencyMessage(e.target.value)}
             placeholder={t('sos.describe_placeholder')}
             rows={3}
-            className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 rounded-lg px-3 py-2 text-sm resize-none"
+            className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-900 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 rounded-lg px-3 py-2 text-sm resize-none"
           />
           <div className="flex items-center justify-between mt-2">
             {speech.supported ? (

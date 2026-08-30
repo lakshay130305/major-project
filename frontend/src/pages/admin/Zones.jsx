@@ -133,13 +133,13 @@ export default function Zones() {
                 <label className="text-xs text-slate-500">Name</label>
                 <input required value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-2 py-1.5" />
+                  className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-slate-900 placeholder:text-slate-400" />
               </div>
               <div>
                 <label className="text-xs text-slate-500">Risk Level</label>
                 <select value={form.risk_level}
                   onChange={(e) => setForm({ ...form, risk_level: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-2 py-1.5 capitalize">
+                  className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-slate-900 capitalize">
                   {RISK_LEVELS.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
@@ -147,13 +147,13 @@ export default function Zones() {
                 <label className="text-xs text-slate-500">Crime Index (0-100)</label>
                 <input type="number" min={0} max={100} value={form.crime_index}
                   onChange={(e) => setForm({ ...form, crime_index: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-2 py-1.5" />
+                  className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-slate-900 placeholder:text-slate-400" />
               </div>
               <div>
                 <label className="text-xs text-slate-500">Description</label>
                 <textarea value={form.description} rows={2}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  className="w-full border border-slate-300 rounded-lg px-2 py-1.5 resize-none" />
+                  className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-slate-900 placeholder:text-slate-400 resize-none" />
               </div>
               {error && <div className="text-xs text-red-600">{error}</div>}
               <button disabled={saving}

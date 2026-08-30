@@ -52,7 +52,7 @@ export default function TouristSearch() {
       <div className="lg:col-span-1 space-y-3">
         <input value={q} onChange={(e) => setQ(e.target.value)}
           placeholder="Search by name or digital ID…"
-          className="w-full border border-slate-300 rounded-lg px-3 py-2" />
+          className="w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 placeholder:text-slate-400" />
         <div className="bg-white rounded-xl shadow-sm divide-y divide-slate-100 max-h-[70vh] overflow-y-auto">
           {filtered.map((t) => (
             <button key={t.id} onClick={() => open(t)}

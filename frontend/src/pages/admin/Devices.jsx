@@ -62,7 +62,7 @@ export default function Devices() {
             <label className="text-xs text-slate-500">Tourist</label>
             <select required value={form.tourist_id}
               onChange={(e) => setForm({ ...form, tourist_id: e.target.value })}
-              className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm">
+              className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm text-slate-900 placeholder:text-slate-400">
               <option value="">Select…</option>
               {tourists.map((t) => (
                 <option key={t.id} value={t.id}>{t.full_name} ({t.digital_id})</option>
@@ -74,13 +74,13 @@ export default function Devices() {
             <input required minLength={4} value={form.device_id}
               onChange={(e) => setForm({ ...form, device_id: e.target.value })}
               placeholder="BAND-0042"
-              className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
+              className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm text-slate-900 placeholder:text-slate-400" />
           </div>
           <div>
             <label className="text-xs text-slate-500">Firmware</label>
             <input value={form.firmware_version}
               onChange={(e) => setForm({ ...form, firmware_version: e.target.value })}
-              className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" />
+              className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm text-slate-900 placeholder:text-slate-400" />
           </div>
           <button className="bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold px-4 py-2 rounded-lg">
             Register

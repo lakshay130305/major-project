@@ -14,7 +14,8 @@
   "geofence": {
     "warning_title": "Geo-fence Warning",
     "warning_body": "You are in {{zone}} ({{risk}} risk). Stay alert and consider leaving the area.",
-    "safe": "You are in a safe area."
+    "safe": "You are in a safe area.",
+    "awaiting_location": "Waiting for your first location update…"
   },
   "tracking": {
     "title": "Live Location Tracking",

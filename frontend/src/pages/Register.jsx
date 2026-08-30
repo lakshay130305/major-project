@@ -22,8 +22,39 @@ export default function Register() {
 
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value })
 
+  const REQUIRED_FIELDS = [
+    ['full_name', 'Full name'],
+    ['document_number', 'Document number'],
+    ['phone', 'Phone'],
+    ['trip_start', 'Trip start'],
+    ['trip_end', 'Trip end'],
+    ['email', 'Email'],
+    ['password', 'Password'],
+  ]
+
+  // Client-side validation is a UX convenience, not the security boundary --
+  // the backend's own TouristCreate schema (required fields, email format,
+  // password strength, trip_end > trip_start) still rejects an invalid
+  // payload sent straight to the API. This just catches it before the round
+  // trip and gives a plain-language message instead of a raw 422.
+  const validate = () => {
+    const missing = REQUIRED_FIELDS.filter(([k]) => !f[k].trim()).map(([, label]) => label)
+    if (missing.length) return `Please fill in: ${missing.join(', ')}.`
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) return 'Enter a valid email address.'
+    if (f.password.length < 8 || !/[A-Za-z]/.test(f.password) || !/\d/.test(f.password)) {
+      return 'Password must be at least 8 characters and contain both letters and numbers.'
+    }
+    if (new Date(f.trip_end) <= new Date(f.trip_start)) return 'Trip end must be after trip start.'
+    return ''
+  }
+
   const submit = async (e) => {
     e.preventDefault()
+    const validationError = validate()
+    if (validationError) {
+      setError(validationError)
+      return
+    }
     setError('')
     setLoading(true)
     try {
@@ -33,8 +64,8 @@ export default function Register() {
         document_type: f.document_type,
         document_number: f.document_number,
         phone: f.phone,
-        email: f.email || null,
-        password: f.password || null,
+        email: f.email,
+        password: f.password,
         trip_start: new Date(f.trip_start).toISOString(),
         trip_end: new Date(f.trip_end).toISOString(),
         emergency_contacts: contacts.filter((c) => c.name && c.phone),
@@ -44,13 +75,10 @@ export default function Register() {
       }
       const { data } = await api.post('/tourists', payload)
       setResult(data)
-      // auto-login if they set credentials
-      if (f.email && f.password) {
-        setTimeout(async () => {
-          const u = await login(f.email, f.password)
-          nav(u.role === 'admin' ? '/admin' : '/app')
-        }, 1500)
-      }
+      setTimeout(async () => {
+        const u = await login(f.email, f.password)
+        nav(u.role === 'admin' ? '/admin' : '/app')
+      }, 1500)
     } catch (err) {
       const d = err.response?.data?.detail
       setError(typeof d === 'string' ? d : (Array.isArray(d) ? d.map((x) => x.msg).join('; ') : 'Registration failed'))
@@ -67,16 +95,14 @@ export default function Register() {
           <h1 className="text-xl font-bold">Digital Tourist ID Issued</h1>
           <div className="mt-3 text-2xl font-mono font-bold text-sky-700">{result.digital_id}</div>
           <p className="text-sm text-slate-500 mt-2">
-            Valid until {new Date(result.trip_end).toLocaleDateString()}.
-            {f.email ? ' Signing you in…' : ''}
+            Valid until {new Date(result.trip_end).toLocaleDateString()}. Signing you in…
           </p>
-          {!f.email && <Link to="/login" className="inline-block mt-4 text-sky-600 underline">Go to login</Link>}
         </div>
       </div>
     )
   }
 
-  const input = 'mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-sky-500 outline-none'
+  const input = 'mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-sky-500 outline-none'
 
   return (
     <div className="min-h-screen bg-slate-100 py-8 px-4">
@@ -141,12 +167,12 @@ export default function Register() {
           </fieldset>
 
           <fieldset className="border border-slate-200 rounded-xl p-4">
-            <legend className="text-sm font-semibold px-2">Login (optional — to access the tourist app)</legend>
+            <legend className="text-sm font-semibold px-2">Login (required — to access the tourist app)</legend>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <label className="text-sm font-medium text-slate-600">Email
-                <input type="email" className={input} value={f.email} onChange={set('email')} /></label>
+                <input type="email" className={input} value={f.email} onChange={set('email')} required /></label>
               <label className="text-sm font-medium text-slate-600">Password (min 8, letters + numbers)
-                <input type="password" className={input} value={f.password} onChange={set('password')} /></label>
+                <input type="password" className={input} value={f.password} onChange={set('password')} required minLength={8} /></label>
             </div>
           </fieldset>
 

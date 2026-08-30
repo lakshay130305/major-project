@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import TrailReplay from './TrailReplay'
 
+
 // jsdom does not implement the layout/SVG internals Leaflet's renderer needs
 // (getBoundingClientRect etc return zeros), so MapContainer throws on mount
 // in this environment regardless of correctness. The behaviour actually under
@@ -58,5 +59,16 @@ describe('TrailReplay', () => {
     render(<TrailReplay pings={pings} />)
     fireEvent.change(screen.getByRole('slider'), { target: { value: '1' } })
     expect(screen.getByText('5.0 km/h')).toBeInTheDocument()
+  })
+
+  it('does not crash when pings arrive after the initial empty render (admin tourist switch)', () => {
+    // TouristSearch renders TrailReplay with pings=[] immediately on click,
+    // then the same instance receives the real history once the fetch
+    // resolves -- it is never remounted in between.
+    const { rerender } = render(<TrailReplay pings={[]} />)
+    expect(screen.getByText(/no location history/i)).toBeInTheDocument()
+
+    rerender(<TrailReplay pings={pings} />)
+    expect(screen.getByText(/Ping 3 \/ 3/)).toBeInTheDocument()
   })
 })

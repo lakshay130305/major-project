@@ -63,7 +63,7 @@ export default function Incidents() {
         <h2 className="text-lg font-bold text-slate-800">Incident Response Workflow</h2>
         <div className="flex items-center gap-2 flex-wrap">
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm">
+            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-900">
             <option value="">All statuses</option>
             <option value="detected">Detected</option>
             <option value="acknowledged">Acknowledged</option>
@@ -71,7 +71,7 @@ export default function Incidents() {
             <option value="resolved">Resolved</option>
           </select>
           <select value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm">
+            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-900">
             <option value="">All severities</option>
             <option value="critical">Critical</option>
             <option value="high">High</option>
@@ -79,7 +79,7 @@ export default function Incidents() {
             <option value="low">Low</option>
           </select>
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm">
+            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-900">
             <option value="newest">Newest first</option>
             <option value="oldest">Oldest first</option>
             <option value="severity">Most severe first</option>
