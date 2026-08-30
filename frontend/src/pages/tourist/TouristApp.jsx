@@ -14,12 +14,15 @@ import useWebSocket from '../../useWebSocket'
 import LanguageSwitcher from '../../components/LanguageSwitcher.jsx'
 import ThemeToggle from '../../components/ThemeToggle.jsx'
 import ScoreExplanation from '../../components/ScoreExplanation.jsx'
+import { enqueueSOS, flushQueue, queueLength } from '../../lib/offlineQueue'
+import useOnlineStatus from '../../hooks/useOnlineStatus'
 
 export default function TouristApp() {
   const { user, logout } = useAuth()
   const nav = useNavigate()
   const { t, i18n } = useTranslation()
   const tid = user.tourist_id
+  const online = useOnlineStatus()
   const [me, setMe] = useState(null)
   const [score, setScore] = useState(null)
   const [zones, setZones] = useState([])
@@ -27,6 +30,8 @@ export default function TouristApp() {
   const [tracking, setTracking] = useState(true)
   const [toast, setToast] = useState(null)
   const [sosSent, setSosSent] = useState(null)
+  const [sosQueued, setSosQueued] = useState(false)
+  const [pendingCount, setPendingCount] = useState(queueLength())
   const [emergencyMessage, setEmergencyMessage] = useState('')
   const posRef = useRef(null)
   const speech = useSpeechRecognition({ lang: i18n.resolvedLanguage || i18n.language })
@@ -87,15 +92,50 @@ export default function TouristApp() {
     await api.post(`/tourists/${tid}/tracking?enabled=${next}`)
   }
 
+  const postSOS = (payload) => api.post(`/tourists/${tid}/sos`, payload)
+
   const sendSOS = async () => {
     const [lat, lng] = posRef.current
     const message = emergencyMessage.trim() || 'Emergency! Need help.'
-    const { data } = await api.post(`/tourists/${tid}/sos`, { lat, lng, message })
-    setSosSent(data)
+    const payload = { lat, lng, message }
+    try {
+      const { data } = await postSOS(payload)
+      setSosSent(data)
+      setSosQueued(false)
+    } catch (err) {
+      // No response at all (offline, DNS failure, connection refused) means
+      // the request never reached the server -- queue it rather than lose
+      // the tap. A real server error (4xx/5xx) DID reach the server, so
+      // that's a genuine failure to surface, not something to silently retry.
+      if (!err.response) {
+        enqueueSOS(payload)
+        setPendingCount(queueLength())
+        setSosQueued(true)
+      } else {
+        throw err
+      }
+    }
     setEmergencyMessage('')
     speech.reset()
     load()
   }
+
+  // Flush any queued SOS the moment connectivity returns, and once on mount
+  // in case one was queued in a previous session that never got a chance to
+  // retry (the tab was closed, the app was killed, etc).
+  useEffect(() => {
+    const tryFlush = async () => {
+      const sent = await flushQueue((payload) => postSOS(payload))
+      if (sent > 0) {
+        setPendingCount(queueLength())
+        setToast(`✅ ${sent} queued SOS alert${sent > 1 ? 's' : ''} sent`)
+        setTimeout(() => setToast(null), 5000)
+      }
+    }
+    tryFlush()
+    window.addEventListener('online', tryFlush)
+    return () => window.removeEventListener('online', tryFlush)
+  }, [tid])
 
   // Voice input fills the description box as soon as a transcript arrives —
   // the tourist can review or edit it before the SOS button is pressed.
@@ -131,6 +171,11 @@ export default function TouristApp() {
           <div className="font-bold">{me.digital_id}</div>
         </div>
         <div className="flex items-center gap-2">
+          {!online && (
+            <span className="text-xs bg-orange-500/90 px-2 py-1 rounded-full font-semibold">
+              📡 Offline
+            </span>
+          )}
           <LanguageSwitcher />
           <ThemeToggle />
           <button onClick={() => { logout(); nav('/login') }} className="text-sm bg-sky-700 px-3 py-1 rounded-lg">
@@ -281,6 +326,22 @@ export default function TouristApp() {
                 list: sosSent.notified_contacts?.map((c) => c.name).join(', '),
               })}
             </div>
+          </div>
+        )}
+
+        {sosQueued && (
+          <div className="bg-orange-500 text-white rounded-xl p-4 text-sm">
+            <div className="font-bold">📡 SOS queued — no connection</div>
+            <div className="mt-1 text-orange-50">
+              You're offline. Your SOS was saved on this device and will be sent
+              automatically the moment you're back online.
+            </div>
+          </div>
+        )}
+
+        {pendingCount > 0 && !sosQueued && (
+          <div className="text-xs text-center text-orange-600 dark:text-orange-400">
+            {pendingCount} SOS alert{pendingCount > 1 ? 's' : ''} still queued, waiting for a connection…
           </div>
         )}
       </div>
