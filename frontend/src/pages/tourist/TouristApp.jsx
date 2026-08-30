@@ -12,6 +12,7 @@ import useSpeechRecognition from '../../hooks/useSpeechRecognition'
 import useGeolocation from '../../hooks/useGeolocation'
 import useWebSocket from '../../useWebSocket'
 import LanguageSwitcher from '../../components/LanguageSwitcher.jsx'
+import ScoreExplanation from '../../components/ScoreExplanation.jsx'
 
 export default function TouristApp() {
   const { user, logout } = useAuth()
@@ -153,6 +154,7 @@ export default function TouristApp() {
               {t('safety.zone')}: {score.breakdown.zone}<br />
               {score.breakdown.night_penalty ? `🌙 ${t('safety.night_caution')}` : `☀️ ${t('safety.daytime')}`}
             </div>
+            <ScoreExplanation explanation={score.breakdown.explanation} />
           </div>
         </div>
 

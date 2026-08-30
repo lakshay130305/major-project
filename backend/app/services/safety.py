@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.time import local_hour_for
 from app.models.tourist import Tourist
 from app.models.zone import Zone
-from app.services import ml_service, weather
+from app.services import explain, ml_service, weather
 from app.services.geo import zones_containing_point
 
 _RISK_WEIGHT = {"low": 20.0, "medium": 50.0, "high": 80.0, "restricted": 100.0}
@@ -52,5 +52,9 @@ def compute_safety_score(
         "night_penalty": hour >= 22 or hour <= 5,
         "anomaly_score": round(anomaly_score, 3),
         "weather_risk": weather_risk,
+        # Per-feature SHAP contributions for THIS prediction -- None when only
+        # the rule-based fallback is active, since that's already an explicit
+        # formula with nothing to decompose.
+        "explanation": explain.explain_safety_score(feats),
     }
     return {"score": score, "band": band_for(score), "breakdown": breakdown}
