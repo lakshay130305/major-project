@@ -1,19 +1,31 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import api from '../../api'
 import useWebSocket from '../../useWebSocket'
 import { SeverityBadge, StatusBadge, Card } from '../../components/ui.jsx'
+import { downloadCSV } from '../../lib/csv'
 
 const NEXT = { detected: 'acknowledged', acknowledged: 'dispatched', dispatched: 'resolved' }
+const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 }
+
+const SORTERS = {
+  newest: (a, b) => new Date(b.detected_at) - new Date(a.detected_at),
+  oldest: (a, b) => new Date(a.detected_at) - new Date(b.detected_at),
+  severity: (a, b) => (SEVERITY_ORDER[a.severity] ?? 9) - (SEVERITY_ORDER[b.severity] ?? 9),
+  response_time: (a, b) =>
+    (b.response_time_seconds ?? -1) - (a.response_time_seconds ?? -1),
+}
 
 export default function Incidents() {
   const [incidents, setIncidents] = useState([])
-  const [filter, setFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
+  const [severityFilter, setSeverityFilter] = useState('')
+  const [sortBy, setSortBy] = useState('newest')
 
   const load = () => {
-    const url = filter ? `/incidents?status=${filter}` : '/incidents'
+    const url = statusFilter ? `/incidents?status=${statusFilter}` : '/incidents'
     api.get(url).then((r) => setIncidents(r.data))
   }
-  useEffect(load, [filter])
+  useEffect(load, [statusFilter])
   useWebSocket((ev) => { if (ev.event === 'incident') load() })
 
   const advance = async (inc) => {
@@ -25,23 +37,64 @@ export default function Incidents() {
 
   const fmt = (s) => s == null ? '—' : `${Math.round(s)}s`
 
+  const visible = useMemo(() => {
+    const filtered = severityFilter
+      ? incidents.filter((i) => i.severity === severityFilter)
+      : incidents
+    return [...filtered].sort(SORTERS[sortBy])
+  }, [incidents, severityFilter, sortBy])
+
+  const exportCSV = () => downloadCSV('incidents', visible.map((inc) => ({
+    id: inc.id,
+    type: inc.type,
+    severity: inc.severity,
+    status: inc.status,
+    description: inc.description,
+    detected_at: inc.detected_at,
+    resolved_at: inc.resolved_at,
+    response_time_seconds: inc.response_time_seconds,
+    lat: inc.lat,
+    lng: inc.lng,
+  })))
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-bold text-slate-800">Incident Response Workflow</h2>
-        <select value={filter} onChange={(e) => setFilter(e.target.value)}
-          className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm">
-          <option value="">All statuses</option>
-          <option value="detected">Detected</option>
-          <option value="acknowledged">Acknowledged</option>
-          <option value="dispatched">Dispatched</option>
-          <option value="resolved">Resolved</option>
-        </select>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm">
+            <option value="">All statuses</option>
+            <option value="detected">Detected</option>
+            <option value="acknowledged">Acknowledged</option>
+            <option value="dispatched">Dispatched</option>
+            <option value="resolved">Resolved</option>
+          </select>
+          <select value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)}
+            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm">
+            <option value="">All severities</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+            className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="severity">Most severe first</option>
+            <option value="response_time">Slowest response first</option>
+          </select>
+          <button onClick={exportCSV} disabled={!visible.length}
+            className="text-sm text-sky-600 hover:text-sky-700 font-semibold disabled:opacity-30 disabled:cursor-not-allowed">
+            ⭳ Export CSV
+          </button>
+        </div>
       </div>
 
       <div className="space-y-3">
-        {incidents.length === 0 && <Card><div className="text-slate-400 text-sm">No incidents.</div></Card>}
-        {incidents.map((inc) => (
+        {visible.length === 0 && <Card><div className="text-slate-400 text-sm">No incidents match this filter.</div></Card>}
+        {visible.map((inc) => (
           <div key={inc.id} className="bg-white rounded-xl shadow-sm p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">

@@ -5,6 +5,7 @@ import {
 } from 'recharts'
 import api from '../../api'
 import { Card, Stat } from '../../components/ui.jsx'
+import { downloadCSV } from '../../lib/csv'
 
 // Validated categorical order (dataviz reference palette) — assigned by fixed order, never cycled.
 const CATEGORICAL = ['#2a78d6', '#008300', '#e87ba4', '#eda100', '#1baf7a', '#eb6834', '#4a3aa7', '#e34948']
@@ -18,6 +19,15 @@ const INK = { grid: '#e1e0d9', axis: '#898781', text: '#52514e' }
 function seqColor(v, max) {
   const i = Math.min(SEQ.length - 1, Math.floor((v / (max || 1)) * SEQ.length))
   return SEQ[i]
+}
+
+function ExportButton({ filename, rows }) {
+  return (
+    <button onClick={() => downloadCSV(filename, rows)} disabled={!rows?.length}
+      className="text-xs text-sky-600 hover:text-sky-700 font-semibold disabled:opacity-30 disabled:cursor-not-allowed">
+      ⭳ CSV
+    </button>
+  )
 }
 
 export default function Analytics() {
@@ -56,7 +66,7 @@ export default function Analytics() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card title="Incidents Over Time">
+        <Card title="Incidents Over Time" actions={<ExportButton filename="incidents-over-time" rows={overTime} />}>
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={overTime} margin={{ top: 10, right: 16, bottom: 0, left: -16 }}>
               <CartesianGrid stroke={INK.grid} vertical={false} />
@@ -69,7 +79,7 @@ export default function Analytics() {
           </ResponsiveContainer>
         </Card>
 
-        <Card title="Alerts by Type">
+        <Card title="Alerts by Type" actions={<ExportButton filename="alerts-by-type" rows={byType} />}>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={byType} margin={{ top: 16, right: 16, bottom: 0, left: -16 }}>
               <CartesianGrid stroke={INK.grid} vertical={false} />
@@ -84,7 +94,7 @@ export default function Analytics() {
           </ResponsiveContainer>
         </Card>
 
-        <Card title="Zone-wise Crime Index (higher = riskier)">
+        <Card title="Zone-wise Crime Index (higher = riskier)" actions={<ExportButton filename="zone-risk" rows={zoneRisk} />}>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={zoneRisk} layout="vertical" margin={{ top: 4, right: 24, bottom: 0, left: 8 }}>
               <CartesianGrid stroke={INK.grid} horizontal={false} />
@@ -99,7 +109,7 @@ export default function Analytics() {
           </ResponsiveContainer>
         </Card>
 
-        <Card title="Incident Severity Breakdown">
+        <Card title="Incident Severity Breakdown" actions={<ExportButton filename="severity-breakdown" rows={severity} />}>
           <ResponsiveContainer width="100%" height={280}>
             <BarChart data={severity} margin={{ top: 16, right: 16, bottom: 0, left: -16 }}>
               <CartesianGrid stroke={INK.grid} vertical={false} />
