@@ -19,7 +19,7 @@ from app.services.geo import (
     zones_containing_point,
 )
 from app.services.safety import compute_safety_score
-from app.websocket.manager import broadcast_sync
+from app.websocket.manager import broadcast_sync, notify_tourist_sync
 
 logger = get_logger(__name__)
 
@@ -34,7 +34,7 @@ def _create_alert(db: Session, tourist_id, atype, severity, message, lat, lng,
     )
     db.add(alert)
     db.flush()
-    broadcast_sync({
+    payload = {
         "event": "alert",
         "id": alert.id,
         "tourist_id": tourist_id,
@@ -44,7 +44,9 @@ def _create_alert(db: Session, tourist_id, atype, severity, message, lat, lng,
         "message": message,
         "lat": lat, "lng": lng,
         "created_at": alert.created_at.isoformat(),
-    })
+    }
+    broadcast_sync(payload)  # admin control-room feed: every tourist's alerts
+    notify_tourist_sync(tourist_id, payload)  # the tourist's own device: only theirs
     return alert
 
 

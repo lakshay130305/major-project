@@ -7,8 +7,10 @@ import { useAuth } from '../../auth.jsx'
 import { ScoreGauge, Card } from '../../components/ui.jsx'
 import { touristIcon, policeIcon, riskColor } from '../../components/mapIcons'
 import { haversineKm, pointInPoly } from '../../components/geo'
-import { TRACK_INTERVAL_MS } from '../../config'
+import { TRACK_INTERVAL_MS, SIMULATE_GPS } from '../../config'
 import useSpeechRecognition from '../../hooks/useSpeechRecognition'
+import useGeolocation from '../../hooks/useGeolocation'
+import useWebSocket from '../../useWebSocket'
 import LanguageSwitcher from '../../components/LanguageSwitcher.jsx'
 
 export default function TouristApp() {
@@ -26,6 +28,8 @@ export default function TouristApp() {
   const [emergencyMessage, setEmergencyMessage] = useState('')
   const posRef = useRef(null)
   const speech = useSpeechRecognition({ lang: i18n.resolvedLanguage || i18n.language })
+  const geo = useGeolocation({ enabled: tracking && !SIMULATE_GPS })
+  const lastSentGeoTs = useRef(0)
 
   const load = async () => {
     const [m, s, z, u] = await Promise.all([
@@ -40,24 +44,40 @@ export default function TouristApp() {
   }
   useEffect(() => { load() }, [])
 
-  // Opt-in live tracking: periodically nudge position and push to backend pipeline.
+  const pushLocation = async (lat, lng, speedKmh) => {
+    posRef.current = [lat, lng]
+    const { data } = await api.post(`/tourists/${tid}/location`, { lat, lng, speed_kmh: speedKmh })
+    setScore((s) => ({ ...s, score: data.safety_score, band: data.band }))
+    setMe((m) => ({ ...m, last_lat: lat, last_lng: lng, safety_score: data.safety_score }))
+    if (data.alerts_raised?.length) {
+      setToast(`⚠ ${data.alerts_raised.join(', ').replace(/_/g, ' ')}`)
+      setTimeout(() => setToast(null), 4000)
+    }
+  }
+
+  // Opt-in live tracking. Two sources, chosen by VITE_SIMULATE_GPS:
+  //  - simulated: a random walk on a timer, for demos on a machine with no
+  //    meaningful GPS (the default, matching the project's existing demo mode)
+  //  - real: navigator.geolocation via useGeolocation, pushed whenever the
+  //    device reports a new fix (throttled to TRACK_INTERVAL_MS)
   useEffect(() => {
-    if (!tracking || !me) return
-    const iv = setInterval(async () => {
+    if (!tracking || !me || !SIMULATE_GPS) return
+    const iv = setInterval(() => {
       const [lat, lng] = posRef.current
       const nlat = lat + (Math.random() - 0.5) * 0.002
       const nlng = lng + (Math.random() - 0.5) * 0.002
-      posRef.current = [nlat, nlng]
-      const { data } = await api.post(`/tourists/${tid}/location`, { lat: nlat, lng: nlng, speed_kmh: 5 })
-      setScore((s) => ({ ...s, score: data.safety_score, band: data.band }))
-      setMe((m) => ({ ...m, last_lat: nlat, last_lng: nlng, safety_score: data.safety_score }))
-      if (data.alerts_raised?.length) {
-        setToast(`⚠ ${data.alerts_raised.join(', ').replace(/_/g, ' ')}`)
-        setTimeout(() => setToast(null), 4000)
-      }
+      pushLocation(nlat, nlng, 5)
     }, TRACK_INTERVAL_MS)
     return () => clearInterval(iv)
   }, [tracking, me?.id])
+
+  useEffect(() => {
+    if (!tracking || !me || SIMULATE_GPS || !geo.position) return
+    const now = Date.now()
+    if (now - lastSentGeoTs.current < TRACK_INTERVAL_MS) return
+    lastSentGeoTs.current = now
+    pushLocation(geo.position.lat, geo.position.lng, geo.position.speedKmh)
+  }, [geo.position, tracking, me?.id])
 
   const toggleTracking = async () => {
     const next = !tracking
@@ -80,6 +100,18 @@ export default function TouristApp() {
   useEffect(() => {
     if (speech.transcript) setEmergencyMessage(speech.transcript)
   }, [speech.transcript])
+
+  // Live push of this tourist's own alerts (geofence/anomaly/health/fall),
+  // server-side scoped to their own record. Previously the app only learned
+  // about an alert the next time ITS OWN ping happened to raise one --
+  // now a server-detected event (e.g. from a linked IoT band) shows up
+  // immediately instead of waiting for the next poll.
+  useWebSocket((ev) => {
+    if (ev.event === 'alert') {
+      setToast(`⚠ ${ev.type?.replace(/_/g, ' ')}: ${ev.message}`)
+      setTimeout(() => setToast(null), 5000)
+    }
+  }, tid ? `/ws/tourist/${tid}` : null)
 
   if (!me || !score) return <div className="p-6 text-center text-slate-500">{t('app.loading')}</div>
 
@@ -152,15 +184,27 @@ export default function TouristApp() {
         </div>
 
         {/* live tracking toggle */}
-        <div className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between">
-          <div>
-            <div className="font-medium">{t('tracking.title')}</div>
-            <div className="text-xs text-slate-500">{t('tracking.subtitle')}</div>
+        <div className="bg-white rounded-xl shadow-sm p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium">{t('tracking.title')}</div>
+              <div className="text-xs text-slate-500">{t('tracking.subtitle')}</div>
+            </div>
+            <button onClick={toggleTracking}
+              className={`w-14 h-8 rounded-full transition relative ${tracking ? 'bg-green-500' : 'bg-slate-300'}`}>
+              <span className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${tracking ? 'left-7' : 'left-1'}`}></span>
+            </button>
           </div>
-          <button onClick={toggleTracking}
-            className={`w-14 h-8 rounded-full transition relative ${tracking ? 'bg-green-500' : 'bg-slate-300'}`}>
-            <span className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${tracking ? 'left-7' : 'left-1'}`}></span>
-          </button>
+          {!SIMULATE_GPS && tracking && geo.permissionState === 'denied' && (
+            <div className="mt-2 text-xs text-red-600">
+              Location permission denied — enable it in your browser settings to be tracked.
+            </div>
+          )}
+          {!SIMULATE_GPS && tracking && geo.permissionState === 'unsupported' && (
+            <div className="mt-2 text-xs text-orange-600">
+              This device doesn't support location services.
+            </div>
+          )}
         </div>
 
         {/* itinerary tracker */}

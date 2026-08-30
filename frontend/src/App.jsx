@@ -5,6 +5,7 @@ import Register from './pages/Register.jsx'
 import AdminLayout from './pages/admin/AdminLayout.jsx'
 import Dashboard from './pages/admin/Dashboard.jsx'
 import TouristSearch from './pages/admin/TouristSearch.jsx'
+import Zones from './pages/admin/Zones.jsx'
 import Incidents from './pages/admin/Incidents.jsx'
 import Analytics from './pages/admin/Analytics.jsx'
 import ModelInsights from './pages/admin/ModelInsights.jsx'
@@ -35,6 +36,7 @@ export default function App() {
       <Route path="/admin" element={<Protected role="admin"><AdminLayout /></Protected>}>
         <Route index element={<Dashboard />} />
         <Route path="tourists" element={<TouristSearch />} />
+        <Route path="zones" element={<Zones />} />
         <Route path="incidents" element={<Incidents />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="model-insights" element={<ModelInsights />} />

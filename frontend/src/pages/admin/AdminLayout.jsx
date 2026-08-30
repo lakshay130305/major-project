@@ -4,6 +4,7 @@ import { useAuth } from '../../auth.jsx'
 const links = [
   { to: '/admin', label: 'Live Dashboard', end: true, icon: '🗺️' },
   { to: '/admin/tourists', label: 'Tourists', icon: '🧳' },
+  { to: '/admin/zones', label: 'Zones', icon: '🗺️' },
   { to: '/admin/incidents', label: 'Incidents', icon: '🚨' },
   { to: '/admin/analytics', label: 'Analytics', icon: '📊' },
   { to: '/admin/model-insights', label: 'Model Insights', icon: '🧠' },

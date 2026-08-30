@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import api from '../../api'
 import { ScoreGauge, StatusBadge, Card } from '../../components/ui.jsx'
+import TrailReplay from '../../components/TrailReplay.jsx'
 
 export default function TouristSearch() {
   const [tourists, setTourists] = useState([])
@@ -10,19 +11,22 @@ export default function TouristSearch() {
   const [chain, setChain] = useState([])
   const [chainValid, setChainValid] = useState(null)
   const [efir, setEfir] = useState(null)
+  const [pings, setPings] = useState([])
 
   useEffect(() => { api.get('/tourists').then((r) => setTourists(r.data)) }, [])
 
   const open = async (t) => {
-    setSelected(t); setQr(null); setChain([]); setEfir(null); setChainValid(null)
-    const [qrR, chR, vR] = await Promise.all([
+    setSelected(t); setQr(null); setChain([]); setEfir(null); setChainValid(null); setPings([])
+    const [qrR, chR, vR, pR] = await Promise.all([
       api.get(`/tourists/${t.id}/qr`),
       api.get(`/tourists/${t.id}/chain`),
       api.get(`/tourists/${t.id}/chain/verify`),
+      api.get(`/tourists/${t.id}/pings?limit=200`),
     ])
     setQr(qrR.data.qr_png_base64)
     setChain(chR.data)
     setChainValid(vR.data.valid)
+    setPings(pR.data)
   }
 
   const genEfir = async () => {
@@ -99,6 +103,10 @@ export default function TouristSearch() {
                 </ul>
               </Card>
             </div>
+
+            <Card title="Location Trail Replay">
+              <TrailReplay pings={pings} />
+            </Card>
 
             <Card title={<span>Digital ID Hash Chain {chainValid != null && (
               <span className={`ml-2 text-xs px-2 py-0.5 rounded-full ${chainValid ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>

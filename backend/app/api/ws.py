@@ -34,3 +34,31 @@ async def alerts_ws(ws: WebSocket, token: str | None = Query(default=None),
         await manager.disconnect(ws)
     except Exception:
         await manager.disconnect(ws)
+
+
+@router.websocket("/ws/tourist/{tourist_id}")
+async def tourist_ws(ws: WebSocket, tourist_id: int, token: str | None = Query(default=None),
+                     db: Session = Depends(get_db)):
+    """A tourist's own live channel: geofence/anomaly/health alerts and SOS
+    dispatch confirmations for THEIR OWN record only. An admin may also connect
+    to any tourist's channel (useful for a control-room "shadow this tourist"
+    view); any other tourist is refused, same as the REST endpoints' scoping.
+    """
+    user = authenticate_ws_token(token, db)
+
+    allowed = user is not None and (
+        user.role == "admin" or (user.role == "tourist" and user.tourist_id == tourist_id)
+    )
+    if not allowed:
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    await manager.connect_tourist(ws, tourist_id)
+    try:
+        await ws.send_json({"event": "connected", "message": "live feed established"})
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        await manager.disconnect_tourist(ws, tourist_id)
+    except Exception:
+        await manager.disconnect_tourist(ws, tourist_id)

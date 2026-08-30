@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, Polygon, Circle, CircleMarker } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, Polygon } from 'react-leaflet'
 import api from '../../api'
 import useWebSocket from '../../useWebSocket'
 import { touristIcon, sosIcon, missingIcon, policeIcon, riskColor } from '../../components/mapIcons'
 import { Stat, SeverityBadge, bandColor } from '../../components/ui.jsx'
 import { DEFAULT_MAP, POLL_INTERVAL_MS, loadMapConfig } from '../../config'
+import HeatmapLayer from '../../components/HeatmapLayer.jsx'
 
 export default function Dashboard() {
   const [tourists, setTourists] = useState([])
@@ -13,20 +14,26 @@ export default function Dashboard() {
   const [alerts, setAlerts] = useState([])
   const [summary, setSummary] = useState(null)
   const [mapCfg, setMapCfg] = useState(DEFAULT_MAP)
+  const [heatPoints, setHeatPoints] = useState([])
+  const [showHeatmap, setShowHeatmap] = useState(true)
 
   const load = async () => {
-    const [t, z, u, a, s] = await Promise.all([
+    const [t, z, u, a, s, hist] = await Promise.all([
       api.get('/tourists'),
       api.get('/zones'),
       api.get('/police-units'),
       api.get('/alerts?limit=30'),
       api.get('/analytics/summary'),
+      api.get('/alerts?limit=500'), // wider history, purely for the heatmap
     ])
     setTourists(t.data)
     setZones(z.data)
     setUnits(u.data)
     setAlerts(a.data)
     setSummary(s.data)
+    setHeatPoints(
+      hist.data.filter((al) => al.lat != null && al.lng != null).map((al) => [al.lat, al.lng, 0.6])
+    )
   }
 
   useEffect(() => {
@@ -39,6 +46,9 @@ export default function Dashboard() {
   const { connected } = useWebSocket((ev) => {
     if (ev.event === 'alert') {
       setAlerts((prev) => [{ ...ev, created_at: ev.created_at || new Date().toISOString() }, ...prev].slice(0, 40))
+      if (ev.lat != null && ev.lng != null) {
+        setHeatPoints((prev) => [...prev, [ev.lat, ev.lng, 0.6]])
+      }
     }
     if (ev.event === 'location') {
       setTourists((prev) => prev.map((t) =>
@@ -53,9 +63,15 @@ export default function Dashboard() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-slate-800">Live Operations</h2>
-        <div className="flex items-center gap-2 text-sm">
-          <span className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`}></span>
-          {connected ? 'Live feed connected' : 'Reconnecting…'}
+        <div className="flex items-center gap-4 text-sm">
+          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <input type="checkbox" checked={showHeatmap} onChange={(e) => setShowHeatmap(e.target.checked)} />
+            Alert heatmap
+          </label>
+          <div className="flex items-center gap-2">
+            <span className={`w-2.5 h-2.5 rounded-full ${connected ? 'bg-green-500' : 'bg-red-500'}`}></span>
+            {connected ? 'Live feed connected' : 'Reconnecting…'}
+          </div>
         </div>
       </div>
 
@@ -87,12 +103,8 @@ export default function Dashboard() {
                 </Popup>
               </Polygon>
             ))}
-            {/* risk heatmap-style emphasis circles */}
-            {zones.filter((z) => ['high', 'restricted'].includes(z.risk_level)).map((z) => {
-              const c = z.polygon.reduce((a, p) => [a[0] + p[0], a[1] + p[1]], [0, 0]).map((v) => v / z.polygon.length)
-              return <Circle key={`h${z.id}`} center={c} radius={350}
-                pathOptions={{ color: riskColor[z.risk_level], fillColor: riskColor[z.risk_level], fillOpacity: 0.25, weight: 0 }} />
-            })}
+            {/* real incident/alert density heatmap, not a fixed-radius zone approximation */}
+            {showHeatmap && heatPoints.length > 0 && <HeatmapLayer points={heatPoints} />}
             {units.map((u) => (
               <Marker key={`u${u.id}`} position={[u.lat, u.lng]} icon={policeIcon}>
                 <Popup><b>{u.name}</b><br />{u.station}<br />☎ {u.phone}</Popup>

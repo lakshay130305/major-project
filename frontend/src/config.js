@@ -7,6 +7,11 @@ export const WS_PATH = import.meta.env.VITE_WS_PATH || '/ws/alerts'
 export const SHOW_DEMO_LOGINS = (import.meta.env.VITE_SHOW_DEMO ?? 'true') !== 'false'
 export const POLL_INTERVAL_MS = Number(import.meta.env.VITE_POLL_INTERVAL_MS || 8000)
 export const TRACK_INTERVAL_MS = Number(import.meta.env.VITE_TRACK_INTERVAL_MS || 5000)
+// Demo/dev convenience: simulate a random walk instead of real GPS, since a
+// laptop/desktop rarely has meaningful geolocation and a live demo needs
+// motion on the map without physically moving. Default true; a real device
+// build sets VITE_SIMULATE_GPS=false to use navigator.geolocation instead.
+export const SIMULATE_GPS = (import.meta.env.VITE_SIMULATE_GPS ?? 'true') !== 'false'
 
 export const DEFAULT_MAP = {
   center: [
