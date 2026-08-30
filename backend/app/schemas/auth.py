@@ -3,6 +3,7 @@ from pydantic import BaseModel, EmailStr
 
 class Token(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     role: str
     tourist_id: int | None = None
@@ -23,3 +24,11 @@ class UserOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str

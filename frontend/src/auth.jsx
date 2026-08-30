@@ -15,6 +15,7 @@ export function AuthProvider({ children }) {
     form.append('password', password)
     const { data } = await api.post('/auth/login', form)
     localStorage.setItem('token', data.access_token)
+    localStorage.setItem('refreshToken', data.refresh_token)
     const u = {
       role: data.role,
       tourist_id: data.tourist_id,
@@ -27,7 +28,15 @@ export function AuthProvider({ children }) {
   }
 
   const logout = () => {
+    const refreshToken = localStorage.getItem('refreshToken')
+    // Best-effort revocation -- fire and forget. Local state is cleared
+    // regardless of whether this call succeeds, since the user is leaving
+    // either way; if it fails, the refresh token still expires naturally.
+    if (refreshToken) {
+      api.post('/auth/logout', { refresh_token: refreshToken }).catch(() => {})
+    }
     localStorage.removeItem('token')
+    localStorage.removeItem('refreshToken')
     localStorage.removeItem('user')
     setUser(null)
   }

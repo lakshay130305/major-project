@@ -33,7 +33,11 @@ class Settings(BaseSettings):
     # Where a generated dev key is cached so it survives restarts (dev only).
     DEV_SECRET_FILE: str = ".dev_secret"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 12  # 12h
+    # Short-lived on purpose: the refresh token (below) is what's actually
+    # revocable, so access tokens should expire quickly rather than need
+    # per-request denylist checks.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
     # ---- password policy ----
     MIN_PASSWORD_LENGTH: int = 8

@@ -43,21 +43,22 @@ describe('AuthProvider', () => {
     expect(screen.getByTestId('who')).toHaveTextContent('admin:Officer')
   })
 
-  it('stores the token and user on login', async () => {
+  it('stores the access and refresh tokens and user on login', async () => {
     api.post.mockResolvedValue({
-      data: { access_token: 'tok123', role: 'admin', tourist_id: null, full_name: 'Officer' },
+      data: { access_token: 'tok123', refresh_token: 'refresh123', role: 'admin', tourist_id: null, full_name: 'Officer' },
     })
     renderProbe()
     await act(async () => { screen.getByText('login').click() })
 
     expect(localStorage.getItem('token')).toBe('tok123')
+    expect(localStorage.getItem('refreshToken')).toBe('refresh123')
     expect(JSON.parse(localStorage.getItem('user')).role).toBe('admin')
     expect(screen.getByTestId('who')).toHaveTextContent('admin:Officer')
   })
 
   it('sends credentials as form-encoded fields (OAuth2 password flow)', async () => {
     api.post.mockResolvedValue({
-      data: { access_token: 't', role: 'tourist', tourist_id: 3, full_name: 'Aarav' },
+      data: { access_token: 't', refresh_token: 'rt', role: 'tourist', tourist_id: 3, full_name: 'Aarav' },
     })
     renderProbe()
     await act(async () => { screen.getByText('login').click() })
@@ -71,23 +72,49 @@ describe('AuthProvider', () => {
 
   it('keeps the tourist_id so the app can scope requests', async () => {
     api.post.mockResolvedValue({
-      data: { access_token: 't', role: 'tourist', tourist_id: 3, full_name: 'Aarav' },
+      data: { access_token: 't', refresh_token: 'rt', role: 'tourist', tourist_id: 3, full_name: 'Aarav' },
     })
     renderProbe()
     await act(async () => { screen.getByText('login').click() })
     expect(JSON.parse(localStorage.getItem('user')).tourist_id).toBe(3)
   })
 
-  it('clears credentials on logout', async () => {
+  it('clears all credentials on logout, including the refresh token', async () => {
     api.post.mockResolvedValue({
-      data: { access_token: 't', role: 'admin', tourist_id: null, full_name: 'Officer' },
+      data: { access_token: 't', refresh_token: 'rt', role: 'admin', tourist_id: null, full_name: 'Officer' },
     })
     renderProbe()
     await act(async () => { screen.getByText('login').click() })
     await act(async () => { screen.getByText('logout').click() })
 
     expect(localStorage.getItem('token')).toBeNull()
+    expect(localStorage.getItem('refreshToken')).toBeNull()
     expect(localStorage.getItem('user')).toBeNull()
+    expect(screen.getByTestId('who')).toHaveTextContent('anonymous')
+  })
+
+  it('logout revokes the refresh token server-side', async () => {
+    api.post.mockResolvedValue({
+      data: { access_token: 't', refresh_token: 'rt-to-revoke', role: 'admin', tourist_id: null, full_name: 'Officer' },
+    })
+    renderProbe()
+    await act(async () => { screen.getByText('login').click() })
+    api.post.mockResolvedValue({})  // the /auth/logout call itself
+    await act(async () => { screen.getByText('logout').click() })
+
+    expect(api.post).toHaveBeenCalledWith('/auth/logout', { refresh_token: 'rt-to-revoke' })
+  })
+
+  it('logout clears local state even if the revoke call fails', async () => {
+    api.post.mockResolvedValueOnce({
+      data: { access_token: 't', refresh_token: 'rt', role: 'admin', tourist_id: null, full_name: 'Officer' },
+    })
+    renderProbe()
+    await act(async () => { screen.getByText('login').click() })
+    api.post.mockRejectedValueOnce(new Error('network down'))
+    await act(async () => { screen.getByText('logout').click() })
+
+    expect(localStorage.getItem('token')).toBeNull()
     expect(screen.getByTestId('who')).toHaveTextContent('anonymous')
   })
 
