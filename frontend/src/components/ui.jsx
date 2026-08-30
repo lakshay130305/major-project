@@ -1,4 +1,6 @@
 // Small shared presentational helpers used across both dashboards.
+// Composed by nearly every page, so dark-mode support lives here once
+// rather than being repeated across every page-specific className.
 
 export function bandColor(score) {
   if (score >= 75) return '#16a34a'   // safe - green
@@ -15,10 +17,10 @@ export function bandLabel(score) {
 }
 
 const SEV = {
-  low: 'bg-slate-100 text-slate-700',
-  medium: 'bg-yellow-100 text-yellow-800',
-  high: 'bg-orange-100 text-orange-800',
-  critical: 'bg-red-100 text-red-800',
+  low: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
+  medium: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
+  high: 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300',
+  critical: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
 }
 
 export function SeverityBadge({ severity }) {
@@ -31,16 +33,16 @@ export function SeverityBadge({ severity }) {
 
 export function StatusBadge({ status }) {
   const map = {
-    active: 'bg-green-100 text-green-800',
-    sos: 'bg-red-100 text-red-800 sos-pulse',
-    missing: 'bg-purple-100 text-purple-800',
-    detected: 'bg-red-100 text-red-800',
-    acknowledged: 'bg-yellow-100 text-yellow-800',
-    dispatched: 'bg-blue-100 text-blue-800',
-    resolved: 'bg-green-100 text-green-800',
+    active: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
+    sos: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300 sos-pulse',
+    missing: 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300',
+    detected: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300',
+    acknowledged: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
+    dispatched: 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
+    resolved: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
   }
   return (
-    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] || 'bg-slate-100 text-slate-700'}`}>
+    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${map[status] || 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200'}`}>
       {status}
     </span>
   )
@@ -54,7 +56,8 @@ export function ScoreGauge({ score, size = 120 }) {
   return (
     <div className="relative inline-flex items-center justify-center">
       <svg width={size} height={size}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e2e8f0" strokeWidth="10" />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="currentColor"
+          className="text-slate-200 dark:text-slate-700" strokeWidth="10" />
         <circle
           cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth="10"
           strokeDasharray={c} strokeDashoffset={c * (1 - pct)} strokeLinecap="round"
@@ -64,16 +67,16 @@ export function ScoreGauge({ score, size = 120 }) {
       </svg>
       <div className="absolute text-center">
         <div className="text-2xl font-bold" style={{ color }}>{Math.round(score)}</div>
-        <div className="text-xs text-slate-500">{bandLabel(score)}</div>
+        <div className="text-xs text-slate-500 dark:text-slate-400">{bandLabel(score)}</div>
       </div>
     </div>
   )
 }
 
-export function Stat({ label, value, accent = 'text-slate-900' }) {
+export function Stat({ label, value, accent = 'text-slate-900 dark:text-slate-100' }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm p-4">
-      <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-4">
+      <div className="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</div>
       <div className={`text-2xl font-bold mt-1 ${accent}`}>{value}</div>
     </div>
   )
@@ -81,14 +84,14 @@ export function Stat({ label, value, accent = 'text-slate-900' }) {
 
 export function Card({ title, children, actions }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm">
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm">
       {title && (
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-          <h3 className="font-semibold text-slate-800">{title}</h3>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-700">
+          <h3 className="font-semibold text-slate-800 dark:text-slate-100">{title}</h3>
           {actions}
         </div>
       )}
-      <div className="p-4">{children}</div>
+      <div className="p-4 text-slate-700 dark:text-slate-200">{children}</div>
     </div>
   )
 }

@@ -12,6 +12,7 @@ import useSpeechRecognition from '../../hooks/useSpeechRecognition'
 import useGeolocation from '../../hooks/useGeolocation'
 import useWebSocket from '../../useWebSocket'
 import LanguageSwitcher from '../../components/LanguageSwitcher.jsx'
+import ThemeToggle from '../../components/ThemeToggle.jsx'
 import ScoreExplanation from '../../components/ScoreExplanation.jsx'
 
 export default function TouristApp() {
@@ -114,7 +115,7 @@ export default function TouristApp() {
     }
   }, tid ? `/ws/tourist/${tid}` : null)
 
-  if (!me || !score) return <div className="p-6 text-center text-slate-500">{t('app.loading')}</div>
+  if (!me || !score) return <div className="p-6 text-center text-slate-500 dark:text-slate-400">{t('app.loading')}</div>
 
   const inZones = zones.filter((z) => pointInPoly(me.last_lat, me.last_lng, z.polygon))
   const riskyZone = inZones.find((z) => ['high', 'restricted'].includes(z.risk_level))
@@ -123,7 +124,7 @@ export default function TouristApp() {
     .sort((a, b) => a.dist - b.dist).slice(0, 3)
 
   return (
-    <div className="min-h-screen bg-slate-100 pb-24">
+    <div className="min-h-screen bg-slate-100 dark:bg-slate-900 pb-24">
       <header className="bg-sky-600 text-white px-4 py-3 flex items-center justify-between sticky top-0 z-[1000]">
         <div>
           <div className="text-xs opacity-80">{t('app.digital_id')}</div>
@@ -131,6 +132,7 @@ export default function TouristApp() {
         </div>
         <div className="flex items-center gap-2">
           <LanguageSwitcher />
+          <ThemeToggle />
           <button onClick={() => { logout(); nav('/login') }} className="text-sm bg-sky-700 px-3 py-1 rounded-lg">
             {t('app.logout')}
           </button>
@@ -145,12 +147,12 @@ export default function TouristApp() {
 
       <div className="max-w-md mx-auto p-4 space-y-4">
         {/* safety score */}
-        <div className="bg-white rounded-xl shadow-sm p-4 flex items-center gap-4">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-4 flex items-center gap-4">
           <ScoreGauge score={score.score} />
           <div>
-            <div className="text-sm text-slate-500">{t('safety.my_score')}</div>
-            <div className="text-lg font-bold">{me.full_name}</div>
-            <div className="text-xs text-slate-500 mt-1">
+            <div className="text-sm text-slate-500 dark:text-slate-400">{t('safety.my_score')}</div>
+            <div className="text-lg font-bold text-slate-900 dark:text-slate-100">{me.full_name}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
               {t('safety.zone')}: {score.breakdown.zone}<br />
               {score.breakdown.night_penalty ? `🌙 ${t('safety.night_caution')}` : `☀️ ${t('safety.daytime')}`}
             </div>
@@ -173,7 +175,7 @@ export default function TouristApp() {
         )}
 
         {/* map */}
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden" style={{ height: 240 }}>
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden" style={{ height: 240 }}>
           <MapContainer center={[me.last_lat, me.last_lng]} zoom={14} style={{ height: '100%' }} key={me.id}>
             <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" attribution="&copy; OSM" />
             {zones.map((z) => (
@@ -186,11 +188,11 @@ export default function TouristApp() {
         </div>
 
         {/* live tracking toggle */}
-        <div className="bg-white rounded-xl shadow-sm p-4">
+        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm p-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-medium">{t('tracking.title')}</div>
-              <div className="text-xs text-slate-500">{t('tracking.subtitle')}</div>
+              <div className="font-medium text-slate-900 dark:text-slate-100">{t('tracking.title')}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">{t('tracking.subtitle')}</div>
             </div>
             <button onClick={toggleTracking}
               className={`w-14 h-8 rounded-full transition relative ${tracking ? 'bg-green-500' : 'bg-slate-300'}`}>
@@ -215,7 +217,7 @@ export default function TouristApp() {
             {me.itinerary?.map((w, i) => (
               <li key={i} className="flex items-center gap-2 text-sm">
                 <span className={`w-2.5 h-2.5 rounded-full ${i === 0 ? 'bg-sky-500' : 'bg-slate-300'}`}></span>
-                <span className={i === 0 ? 'font-medium' : 'text-slate-500'}>{w.name}</span>
+                <span className={i === 0 ? 'font-medium text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400'}>{w.name}</span>
                 {i === 0 && <span className="text-xs text-sky-600 ml-auto">{t('itinerary.next_stop')}</span>}
               </li>
             ))}
@@ -229,9 +231,9 @@ export default function TouristApp() {
               <li key={u.id} className="flex items-center justify-between text-sm">
                 <div>
                   <div className="font-medium">{u.name}</div>
-                  <div className="text-xs text-slate-500">{u.station} · ☎ {u.phone}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400">{u.station} · ☎ {u.phone}</div>
                 </div>
-                <span className="text-xs text-slate-500">{u.dist.toFixed(1)} km</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400">{u.dist.toFixed(1)} km</span>
               </li>
             ))}
           </ul>
@@ -244,7 +246,7 @@ export default function TouristApp() {
             onChange={(e) => setEmergencyMessage(e.target.value)}
             placeholder={t('sos.describe_placeholder')}
             rows={3}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm resize-none"
+            className="w-full border border-slate-300 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100 rounded-lg px-3 py-2 text-sm resize-none"
           />
           <div className="flex items-center justify-between mt-2">
             {speech.supported ? (
@@ -284,7 +286,7 @@ export default function TouristApp() {
       </div>
 
       {/* SOS button */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-slate-100 to-transparent">
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-slate-100 dark:from-slate-900 to-transparent">
         <div className="max-w-md mx-auto">
           <button onClick={sendSOS}
             className="w-full bg-red-600 hover:bg-red-700 text-white font-bold text-lg py-4 rounded-2xl shadow-lg sos-pulse">

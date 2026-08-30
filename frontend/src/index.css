@@ -8,7 +8,9 @@ body {
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   background: #f1f5f9;
   color: #0f172a;
+  transition: background-color .15s ease, color .15s ease;
 }
+html.dark body { background: #0f172a; color: #e2e8f0; }
 
 /* Leaflet marker fix when bundling */
 .leaflet-container { font: inherit; }

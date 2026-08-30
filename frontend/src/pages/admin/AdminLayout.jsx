@@ -1,5 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../auth.jsx'
+import ThemeToggle from '../../components/ThemeToggle.jsx'
 
 const links = [
   { to: '/admin', label: 'Live Dashboard', end: true, icon: '🗺️' },
@@ -33,6 +34,7 @@ export default function AdminLayout() {
         </nav>
         <div className="flex items-center gap-3 text-sm">
           <span className="text-slate-300 hidden sm:inline">{user?.full_name}</span>
+          <ThemeToggle />
           <button onClick={() => { logout(); nav('/login') }}
             className="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded-lg">Logout</button>
         </div>
